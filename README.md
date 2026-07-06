@@ -360,7 +360,8 @@ Secrets (DB credentials, Kafka auth) live in AWS Secrets Manager and are injecte
 - [x] Add `docker-compose.yml` (Postgres + Kafka) for local development
 - [x] Add the Matching scoring algorithm with full TDD test suite
 - [ ] Wire `freelancer-profile` end to end and publish real `ProfileUpdated` events
-- [ ] Angular dashboard: mission list, match list, pipeline kanban
+- [x] Angular dashboard: mission list + publish form, match lookup by freelancer id
+- [ ] Angular: profile management and application pipeline kanban, once their backend contexts exist
 - [ ] Terraform `dev` environment, deployed end-to-end
 - [ ] Optional: introduce Cucumber for living-documentation acceptance tests
 - [ ] Optional: extract one context (e.g. Notification) into its own microservice, as a worked example of the monolith-to-microservice split
