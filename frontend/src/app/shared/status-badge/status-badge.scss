@@ -1,0 +1,21 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--color-neutral-bg);
+  color: var(--color-neutral-text);
+
+  &--open {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+  }
+
+  &--closed {
+    background: var(--color-neutral-bg);
+    color: var(--color-neutral-text);
+  }
+}

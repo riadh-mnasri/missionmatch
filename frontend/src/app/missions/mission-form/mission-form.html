@@ -1,0 +1,36 @@
+<form class="form" [formGroup]="form" (ngSubmit)="submit()">
+  <div class="form__grid">
+    <label class="field">
+      <span class="field__label">Title</span>
+      <input class="field__input" type="text" formControlName="title" placeholder="Kotlin backend developer" />
+    </label>
+
+    <label class="field">
+      <span class="field__label">Client</span>
+      <input class="field__input" type="text" formControlName="clientName" placeholder="Acme Corp" />
+    </label>
+
+    <label class="field field--wide">
+      <span class="field__label">Required skills (comma-separated)</span>
+      <input class="field__input" type="text" formControlName="requiredSkills" placeholder="kotlin, spring, kafka" />
+    </label>
+
+    <label class="field">
+      <span class="field__label">Daily rate (EUR)</span>
+      <input class="field__input" type="number" formControlName="dailyRateAmount" min="1" />
+    </label>
+
+    <label class="field">
+      <span class="field__label">Start date</span>
+      <input class="field__input" type="date" formControlName="startDate" />
+    </label>
+  </div>
+
+  @if (errorMessage()) {
+    <p class="error-text">{{ errorMessage() }}</p>
+  }
+
+  <button class="form__submit" type="submit" [disabled]="submitting()">
+    {{ submitting() ? 'Publishing…' : 'Publish mission' }}
+  </button>
+</form>

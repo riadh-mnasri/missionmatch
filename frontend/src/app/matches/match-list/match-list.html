@@ -1,0 +1,55 @@
+<section class="page">
+  <header class="page__header">
+    <h1>Matches</h1>
+    <p class="page__subtitle">
+      Look up the missions matched to a freelancer profile, ranked by score.
+    </p>
+  </header>
+
+  <div class="card">
+    <h2 class="card__title">Find matches</h2>
+    <p class="hint">
+      Profile management isn't wired up yet, so paste a freelancer id (UUID) to look up its matches.
+    </p>
+    <form class="search" (ngSubmit)="search()">
+      <input
+        class="search__input"
+        type="text"
+        name="freelancerId"
+        placeholder="Freelancer id (UUID)"
+        [(ngModel)]="freelancerId"
+      />
+      <button class="search__submit" type="submit" [disabled]="loading()">
+        {{ loading() ? 'Searching…' : 'Search' }}
+      </button>
+    </form>
+    @if (errorMessage()) {
+      <p class="error-text">{{ errorMessage() }}</p>
+    }
+  </div>
+
+  @if (searched()) {
+    <div class="card">
+      <h2 class="card__title">Results</h2>
+
+      @if (matches().length === 0) {
+        <p class="empty-state">No matches found for this freelancer yet.</p>
+      } @else {
+        <ul class="match-list">
+          @for (match of matches(); track match.missionId) {
+            <li class="match-card">
+              <div>
+                <p class="match-card__label">Mission</p>
+                <p class="match-card__value">{{ match.missionId }}</p>
+              </div>
+              <div class="match-card__score">
+                <span class="match-card__score-value">{{ (match.score * 100).toFixed(0) }}%</span>
+                <span class="match-card__score-label">match</span>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  }
+</section>

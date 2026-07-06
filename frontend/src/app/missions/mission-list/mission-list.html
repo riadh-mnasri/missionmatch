@@ -1,0 +1,57 @@
+<section class="page">
+  <header class="page__header">
+    <h1>Missions</h1>
+    <p class="page__subtitle">Publish a mission and track which ones are still open.</p>
+  </header>
+
+  <div class="card">
+    <h2 class="card__title">Publish a new mission</h2>
+    <app-mission-form (published)="loadMissions()" />
+  </div>
+
+  <div class="card">
+    <h2 class="card__title">All missions</h2>
+
+    @if (loading()) {
+      <p class="empty-state">Loading missions…</p>
+    } @else if (errorMessage()) {
+      <p class="error-text">{{ errorMessage() }}</p>
+    } @else if (missions().length === 0) {
+      <p class="empty-state">No missions published yet.</p>
+    } @else {
+      <ul class="mission-list">
+        @for (mission of missions(); track mission.id) {
+          <li class="mission-card">
+            <div class="mission-card__main">
+              <div class="mission-card__heading">
+                <h3>{{ mission.title }}</h3>
+                <app-status-badge [status]="mission.status" />
+              </div>
+              <p class="mission-card__client">{{ mission.clientName }}</p>
+              <ul class="mission-card__skills">
+                @for (skill of mission.requiredSkills; track skill) {
+                  <li>{{ skill }}</li>
+                }
+              </ul>
+            </div>
+
+            <div class="mission-card__side">
+              <span class="mission-card__rate">{{ mission.dailyRateAmount }} EUR / day</span>
+              <span class="mission-card__date">Starts {{ mission.startDate }}</span>
+              @if (mission.status === 'OPEN') {
+                <button
+                  class="mission-card__close"
+                  type="button"
+                  [disabled]="closingId() === mission.id"
+                  (click)="closeMission(mission.id)"
+                >
+                  {{ closingId() === mission.id ? 'Closing…' : 'Close mission' }}
+                </button>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  </div>
+</section>
