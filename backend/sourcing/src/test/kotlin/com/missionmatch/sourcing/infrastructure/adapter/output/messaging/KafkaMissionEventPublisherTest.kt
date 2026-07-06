@@ -52,6 +52,7 @@ class KafkaMissionEventPublisherTest {
             missionId = MissionId.generate(),
             requiredSkills = setOf("kotlin", "spring"),
             dailyRateAmount = BigDecimal.valueOf(600),
+            dailyRateCurrency = "EUR",
             startDate = LocalDate.now().plusWeeks(2),
         )
 

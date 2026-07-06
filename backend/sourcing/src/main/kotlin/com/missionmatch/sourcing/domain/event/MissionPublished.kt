@@ -10,6 +10,7 @@ data class MissionPublished(
     val missionId: MissionId,
     val requiredSkills: Set<String>,
     val dailyRateAmount: BigDecimal,
+    val dailyRateCurrency: String,
     val startDate: LocalDate,
     override val metadata: EventMetadata = EventMetadata(),
 ) : DomainEvent

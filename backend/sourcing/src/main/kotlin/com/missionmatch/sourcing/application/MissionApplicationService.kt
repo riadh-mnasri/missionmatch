@@ -33,6 +33,7 @@ class MissionApplicationService(
                 missionId = mission.id,
                 requiredSkills = mission.requiredSkills.skills,
                 dailyRateAmount = mission.dailyRate.amount,
+                dailyRateCurrency = mission.dailyRate.currency,
                 startDate = mission.startDate,
             ),
         )
