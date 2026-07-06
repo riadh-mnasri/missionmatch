@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
 @RestController
-@RequestMapping("/matches")
+@RequestMapping("/api/matches")
 class MatchController(
     private val getMatchesUseCase: GetMatchesUseCase,
 ) {

@@ -17,4 +17,6 @@ class MissionRepositoryAdapter(
 
     override fun findById(missionId: MissionId): Mission? =
         jpaRepository.findById(missionId.value).map { it.toDomain() }.orElse(null)
+
+    override fun findAll(): List<Mission> = jpaRepository.findAll().map { it.toDomain() }
 }

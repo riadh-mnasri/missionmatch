@@ -284,17 +284,18 @@ Every test in the codebase, at every layer, follows the **`// Given // When // T
 
 ## REST API overview
 
-Each context exposes its own REST resource; there is no API gateway in this reference project (one could be added as a Terraform/infra concern without touching the backend code).
+Each context exposes its own REST resource under an `/api` prefix; there is no API gateway in this reference project (one could be added as a Terraform/infra concern without touching the backend code). The `/api` prefix exists specifically so the Angular frontend's own client-side routes (`/missions`, `/matches`, ...) never collide with a backend path when both are served from the same origin through the dev-server proxy or a production reverse proxy.
 
 | Method | Path | Context | Purpose |
 |---|---|---|---|
-| `POST` | `/missions` | Sourcing | Publish a new mission |
-| `GET` | `/missions/{id}` | Sourcing | Fetch mission details |
-| `POST` | `/missions/{id}/close` | Sourcing | Close a mission |
-| `PUT` | `/profile` | FreelancerProfile | Update skills/rate/availability |
-| `GET` | `/matches?freelancerId=` | Matching | List matches for a freelancer |
-| `GET` | `/candidatures?freelancerId=` | ApplicationTracking | List pipeline entries |
-| `PATCH` | `/candidatures/{id}/status` | ApplicationTracking | Move a candidature to another pipeline stage |
+| `POST` | `/api/missions` | Sourcing | Publish a new mission |
+| `GET` | `/api/missions` | Sourcing | List all missions |
+| `GET` | `/api/missions/{id}` | Sourcing | Fetch mission details |
+| `POST` | `/api/missions/{id}/close` | Sourcing | Close a mission |
+| `PUT` | `/api/profile` | FreelancerProfile | Update skills/rate/availability |
+| `GET` | `/api/matches?freelancerId=` | Matching | List matches for a freelancer |
+| `GET` | `/api/candidatures?freelancerId=` | ApplicationTracking | List pipeline entries |
+| `PATCH` | `/api/candidatures/{id}/status` | ApplicationTracking | Move a candidature to another pipeline stage |
 
 ---
 

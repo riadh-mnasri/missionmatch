@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
 @RestController
-@RequestMapping("/missions")
+@RequestMapping("/api/missions")
 class MissionController(
     private val publishMissionUseCase: PublishMissionUseCase,
     private val closeMissionUseCase: CloseMissionUseCase,
@@ -40,6 +40,9 @@ class MissionController(
 
         return MissionResponse.from(mission)
     }
+
+    @GetMapping
+    fun getAll(): List<MissionResponse> = getMissionUseCase.getAll().map { MissionResponse.from(it) }
 
     @GetMapping("/{id}")
     fun getById(@PathVariable id: UUID): ResponseEntity<MissionResponse> {

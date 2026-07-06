@@ -33,7 +33,7 @@ class MatchControllerTest {
         whenever(getMatchesUseCase.getMatchesForFreelancer(freelancerId)).thenReturn(listOf(match))
 
         // When
-        val result = mockMvc.perform(get("/matches").param("freelancerId", freelancerId.value.toString()))
+        val result = mockMvc.perform(get("/api/matches").param("freelancerId", freelancerId.value.toString()))
 
         // Then
         result.andExpect(status().isOk)

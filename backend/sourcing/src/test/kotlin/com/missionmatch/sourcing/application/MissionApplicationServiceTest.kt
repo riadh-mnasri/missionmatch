@@ -81,4 +81,23 @@ class MissionApplicationServiceTest {
         // Then
         assertThatThrownBy { service.close(unknownId) }.isInstanceOf(NoSuchElementException::class.java)
     }
+
+    @Test
+    fun `getting all missions delegates to the repository`() {
+        // Given
+        val mission = Mission.publish(
+            title = "Kotlin backend developer",
+            clientName = "Acme Corp",
+            requiredSkills = SkillSet.of("kotlin"),
+            dailyRate = Money.of(600.0),
+            startDate = LocalDate.now(),
+        )
+        whenever(missionRepository.findAll()).thenReturn(listOf(mission))
+
+        // When
+        val missions = service.getAll()
+
+        // Then
+        assertThat(missions).containsExactly(mission)
+    }
 }

@@ -65,7 +65,7 @@ class MissionControllerTest {
 
         // When
         val result = mockMvc.perform(
-            post("/missions")
+            post("/api/missions")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)),
         )
@@ -77,13 +77,33 @@ class MissionControllerTest {
     }
 
     @Test
+    fun `listing missions returns every known mission`() {
+        // Given
+        val mission = Mission.publish(
+            title = "Kotlin backend developer",
+            clientName = "Acme Corp",
+            requiredSkills = SkillSet.of("kotlin"),
+            dailyRate = Money.of(600.0),
+            startDate = LocalDate.now(),
+        )
+        whenever(getMissionUseCase.getAll()).thenReturn(listOf(mission))
+
+        // When
+        val result = mockMvc.perform(get("/api/missions"))
+
+        // Then
+        result.andExpect(status().isOk)
+            .andExpect(jsonPath("$[0].title").value(mission.title))
+    }
+
+    @Test
     fun `fetching an unknown mission returns 404`() {
         // Given
         val unknownId = MissionId.generate()
         whenever(getMissionUseCase.getById(unknownId)).thenReturn(null)
 
         // When
-        val result = mockMvc.perform(get("/missions/${unknownId.value}"))
+        val result = mockMvc.perform(get("/api/missions/${unknownId.value}"))
 
         // Then
         result.andExpect(status().isNotFound)
@@ -95,7 +115,7 @@ class MissionControllerTest {
         val missionId = MissionId.generate()
 
         // When
-        val result = mockMvc.perform(post("/missions/${missionId.value}/close"))
+        val result = mockMvc.perform(post("/api/missions/${missionId.value}/close"))
 
         // Then
         result.andExpect(status().isNoContent)

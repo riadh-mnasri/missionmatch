@@ -51,4 +51,6 @@ class MissionApplicationService(
     }
 
     override fun getById(missionId: MissionId): Mission? = missionRepository.findById(missionId)
+
+    override fun getAll(): List<Mission> = missionRepository.findAll()
 }
