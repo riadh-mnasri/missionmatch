@@ -10,6 +10,7 @@ import jakarta.persistence.Column
 import jakarta.persistence.ElementCollection
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
+import jakarta.persistence.FetchType
 import jakarta.persistence.Enumerated
 import jakarta.persistence.Id
 import jakarta.persistence.Table
@@ -29,7 +30,7 @@ class MissionEntity(
     @Column(nullable = false)
     val clientName: String,
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "mission_required_skills", joinColumns = [jakarta.persistence.JoinColumn(name = "mission_id")])
     @Column(name = "skill")
     val requiredSkills: Set<String>,

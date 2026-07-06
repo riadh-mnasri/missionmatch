@@ -8,6 +8,7 @@ import jakarta.persistence.CollectionTable
 import jakarta.persistence.Column
 import jakarta.persistence.ElementCollection
 import jakarta.persistence.Entity
+import jakarta.persistence.FetchType
 import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.Table
@@ -20,7 +21,7 @@ class ProfileSnapshotEntity(
     @Id
     val id: UUID,
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "profile_snapshot_skills", joinColumns = [JoinColumn(name = "freelancer_id")])
     @Column(name = "skill")
     val skills: Set<String>,
