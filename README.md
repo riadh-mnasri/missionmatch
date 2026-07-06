@@ -355,9 +355,10 @@ Secrets (DB credentials, Kafka auth) live in AWS Secrets Manager and are injecte
 
 ## Roadmap
 
-- [ ] Scaffold Gradle multi-module backend with the `sourcing` context fully wired (domain → application → infrastructure)
-- [ ] Add `docker-compose.yml` (Postgres + Kafka) for local development
-- [ ] Add the Matching scoring algorithm with full TDD test suite
+- [x] Scaffold Gradle multi-module backend with the `sourcing` context fully wired (domain → application → infrastructure)
+- [x] Add `docker-compose.yml` (Postgres + Kafka) for local development
+- [x] Add the Matching scoring algorithm with full TDD test suite
+- [ ] Wire `freelancer-profile` end to end and publish real `ProfileUpdated` events
 - [ ] Angular dashboard: mission list, match list, pipeline kanban
 - [ ] Terraform `dev` environment, deployed end-to-end
 - [ ] Optional: introduce Cucumber for living-documentation acceptance tests
