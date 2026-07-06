@@ -1,0 +1,30 @@
+# Gradle
+.gradle/
+backend/**/build/
+!backend/**/src/**/build/
+
+# Gradle wrapper distribution cache (kept: wrapper jar + properties are versioned)
+backend/.gradle/
+
+# IDE
+.idea/
+*.iml
+out/
+
+# OS
+.DS_Store
+
+# Node / Angular (frontend, added later)
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Terraform
+infra/terraform/**/.terraform/
+infra/terraform/**/*.tfstate
+infra/terraform/**/*.tfstate.backup
+infra/terraform/**/.terraform.lock.hcl
+
+# Env
+.env
+.env.local
