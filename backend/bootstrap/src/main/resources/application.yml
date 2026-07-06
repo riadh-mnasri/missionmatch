@@ -1,12 +1,12 @@
 server:
-  port: 8080
+  port: 8181
 
 spring:
   application:
     name: missionmatch
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/missionmatch
+    url: jdbc:postgresql://localhost:5442/missionmatch
     username: missionmatch
     password: missionmatch
 
@@ -16,7 +16,7 @@ spring:
     open-in-view: false
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: localhost:9192
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer

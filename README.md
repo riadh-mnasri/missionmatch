@@ -312,6 +312,8 @@ cd backend && ./gradlew :bootstrap:bootRun
 cd frontend && npm start
 ```
 
+Ports are deliberately non-default to avoid clashing with other projects running on the same machine: backend API on `8181`, frontend dev server on `4310`, Postgres on `5442`, Kafka on `9192`. The frontend's dev-server proxy (`proxy.conf.json`) already points at `8181`, so `npm start` works out of the box once the backend is up.
+
 A `docker-compose.yml` at the repo root provisions Postgres and a single-broker Kafka, matching what Testcontainers spins up in tests - the goal is that "it passed the integration tests" and "it works locally" rely on the same infrastructure shape.
 
 ---
