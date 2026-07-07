@@ -1,0 +1,20 @@
+<div class="chip-input" [class.chip-input--invalid]="isInvalid()">
+  @for (skill of skills(); track skill) {
+    <span [class]="tagColorClass(skill)">
+      {{ skill }}
+      <button type="button" class="chip-input__remove" (click)="remove(skill)" aria-label="Remove skill">×</button>
+    </span>
+  }
+  <input
+    class="chip-input__field"
+    type="text"
+    [placeholder]="skills().length === 0 ? placeholder() : ''"
+    [(ngModel)]="draft"
+    [ngModelOptions]="{ standalone: true }"
+    (keydown)="onKeydown($event)"
+    (blur)="commitDraft()"
+  />
+</div>
+@if (isInvalid()) {
+  <span class="chip-input__hint">Add at least one skill.</span>
+}

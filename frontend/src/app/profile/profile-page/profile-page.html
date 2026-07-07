@@ -1,0 +1,49 @@
+<section class="page">
+  <header class="page__header">
+    <span class="page__eyebrow">FreelancerProfile</span>
+    <h1 class="page__title">Your profile</h1>
+    <p class="page__subtitle">
+      Set your skills and expected daily rate so Matching can score missions against them.
+    </p>
+  </header>
+
+  <div class="card">
+    <h2 class="card__title">Your identity</h2>
+    <p class="hint">
+      There's no login yet, so this browser has been assigned a freelancer id, stored locally.
+      It's the same id the Matches page looks up by default.
+    </p>
+    <code class="identity-id">{{ freelancerId }}</code>
+  </div>
+
+  <div class="card">
+    <h2 class="card__title">Skills &amp; rate</h2>
+
+    @if (loading()) {
+      <p class="empty-state">Loading your profile…</p>
+    } @else {
+      <form class="form" [formGroup]="form" (ngSubmit)="save()">
+        <div class="field field--wide">
+          <span class="field__label">Skills</span>
+          <app-chip-input [(skills)]="skills" [submitted]="submitAttempted()" placeholder="kotlin, spring, kafka…" />
+        </div>
+
+        <label class="field">
+          <span class="field__label">Expected daily rate (EUR)</span>
+          <input class="field__input" type="number" formControlName="expectedDailyRateAmount" min="1" />
+        </label>
+
+        @if (errorMessage()) {
+          <p class="error-text">{{ errorMessage() }}</p>
+        }
+        @if (savedJustNow()) {
+          <p class="success-text">Profile saved.</p>
+        }
+
+        <button class="form__submit" type="submit" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : 'Save profile' }}
+        </button>
+      </form>
+    }
+  </div>
+</section>

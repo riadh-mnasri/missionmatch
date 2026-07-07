@@ -12,26 +12,7 @@
 
     <div class="field field--wide">
       <span class="field__label">Required skills</span>
-      <div class="chip-input">
-        @for (skill of skills(); track skill) {
-          <span [class]="tagColorClass(skill)">
-            {{ skill }}
-            <button type="button" class="chip-input__remove" (click)="removeSkill(skill)" aria-label="Remove skill">×</button>
-          </span>
-        }
-        <input
-          class="chip-input__field"
-          type="text"
-          placeholder="Type a skill and press Enter"
-          [(ngModel)]="skillDraft"
-          [ngModelOptions]="{ standalone: true }"
-          (keydown)="onSkillKeydown($event)"
-          (blur)="commitSkillDraft()"
-        />
-      </div>
-      @if (skillsTouched() && skills().length === 0) {
-        <span class="field__hint field__hint--error">Add at least one skill.</span>
-      }
+      <app-chip-input [(skills)]="skills" [submitted]="submitAttempted()" placeholder="kotlin, spring, kafka…" />
     </div>
 
     <label class="field">

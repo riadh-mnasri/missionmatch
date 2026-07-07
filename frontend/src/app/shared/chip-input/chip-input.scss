@@ -1,0 +1,54 @@
+.chip-input {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.6rem;
+  background: var(--color-surface);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:focus-within {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
+  }
+
+  &--invalid {
+    border-color: var(--color-danger);
+  }
+
+  &__field {
+    flex: 1;
+    min-width: 160px;
+    border: none;
+    outline: none;
+    font-size: 0.9rem;
+    padding: 0.2rem 0.15rem;
+    background: transparent;
+    color: var(--color-text);
+  }
+
+  &__remove {
+    border: none;
+    background: none;
+    color: inherit;
+    font-size: 0.95rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 0.3rem;
+    opacity: 0.6;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+
+  &__hint {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 0.78rem;
+    color: var(--color-danger);
+  }
+}

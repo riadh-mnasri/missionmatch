@@ -1,0 +1,16 @@
+.hint {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin: -0.75rem 0 0;
+}
+
+.identity-id {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  background: var(--color-neutral-bg);
+  color: var(--color-text);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  align-self: flex-start;
+}
