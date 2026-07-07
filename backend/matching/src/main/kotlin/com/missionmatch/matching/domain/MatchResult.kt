@@ -18,6 +18,8 @@ class MatchResult private constructor(
 ) {
     fun isEligible(): Boolean = score.isAboveThreshold()
 
+    fun recompute(score: MatchingScore): MatchResult = MatchResult(id, missionId, freelancerId, score, Instant.now())
+
     companion object {
         fun compute(missionId: MissionId, freelancerId: FreelancerId, score: MatchingScore): MatchResult =
             MatchResult(MatchResultId.generate(), missionId, freelancerId, score, Instant.now())

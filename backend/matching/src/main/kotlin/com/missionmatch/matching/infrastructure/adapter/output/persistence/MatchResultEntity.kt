@@ -9,11 +9,15 @@ import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import jakarta.persistence.UniqueConstraint
 import java.time.Instant
 import java.util.UUID
 
 @Entity
-@Table(name = "match_results")
+@Table(
+    name = "match_results",
+    uniqueConstraints = [UniqueConstraint(columnNames = ["mission_id", "freelancer_id"])],
+)
 class MatchResultEntity(
     @Id
     val id: UUID,

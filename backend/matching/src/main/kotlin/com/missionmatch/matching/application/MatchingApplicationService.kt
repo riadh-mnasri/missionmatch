@@ -56,7 +56,13 @@ class MatchingApplicationService(
         val score = matchingPolicy.score(mission, profile)
         if (!score.isAboveThreshold()) return
 
-        val matchResult = MatchResult.compute(mission.missionId, profile.freelancerId, score)
+        val existing = matchResultRepository.findByMissionIdAndFreelancerId(mission.missionId, profile.freelancerId)
+        // Kafka delivers at-least-once: the same event can be reprocessed (e.g. during a
+        // consumer rebalance), so recomputing must update the existing match rather than
+        // insert a duplicate row and re-fire a redundant MatchComputed event.
+        if (existing != null && existing.score == score) return
+
+        val matchResult = existing?.recompute(score) ?: MatchResult.compute(mission.missionId, profile.freelancerId, score)
         matchResultRepository.save(matchResult)
         matchEventPublisher.publish(
             MatchComputed(

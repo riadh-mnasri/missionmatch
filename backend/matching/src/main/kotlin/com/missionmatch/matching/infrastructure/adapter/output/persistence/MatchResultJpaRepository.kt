@@ -5,4 +5,5 @@ import java.util.UUID
 
 interface MatchResultJpaRepository : JpaRepository<MatchResultEntity, UUID> {
     fun findByFreelancerId(freelancerId: UUID): List<MatchResultEntity>
+    fun findByMissionIdAndFreelancerId(missionId: UUID, freelancerId: UUID): MatchResultEntity?
 }

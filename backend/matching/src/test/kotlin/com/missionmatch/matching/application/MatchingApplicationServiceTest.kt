@@ -7,7 +7,9 @@ import com.missionmatch.matching.application.port.output.MatchResultRepository
 import com.missionmatch.matching.application.port.output.MissionSnapshotRepository
 import com.missionmatch.matching.application.port.output.ProfileSnapshotRepository
 import com.missionmatch.matching.domain.FreelancerId
+import com.missionmatch.matching.domain.MatchResult
 import com.missionmatch.matching.domain.MatchingPolicy
+import com.missionmatch.matching.domain.MatchingScore
 import com.missionmatch.matching.domain.MissionId
 import com.missionmatch.matching.domain.MissionSnapshot
 import com.missionmatch.matching.domain.ProfileSnapshot
@@ -18,6 +20,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -125,6 +128,75 @@ class MatchingApplicationServiceTest {
         // Then
         verify(matchResultRepository, never()).save(any())
         verify(matchEventPublisher, never()).publish(any())
+    }
+
+    @Test
+    fun `reprocessing the same mission published event does not duplicate the match`() {
+        // Given
+        val profile = ProfileSnapshot(
+            freelancerId = FreelancerId(UUID.randomUUID()),
+            skills = SkillSet.of("kotlin", "spring"),
+            expectedDailyRate = Money.of(500.0),
+        )
+        whenever(profileSnapshotRepository.findAll()).thenReturn(listOf(profile))
+
+        val command = MissionPublishedCommand(
+            missionId = MissionId(UUID.randomUUID()),
+            requiredSkills = setOf("kotlin", "spring"),
+            dailyRateAmount = BigDecimal.valueOf(600),
+            dailyRateCurrency = "EUR",
+        )
+
+        val expectedScore = MatchingPolicy().score(
+            MissionSnapshot(
+                missionId = command.missionId,
+                requiredSkills = SkillSet.of(command.requiredSkills),
+                dailyRate = Money(command.dailyRateAmount, command.dailyRateCurrency),
+                open = true,
+            ),
+            profile,
+        )
+        val existingMatch = MatchResult.compute(command.missionId, profile.freelancerId, expectedScore)
+        whenever(matchResultRepository.findByMissionIdAndFreelancerId(command.missionId, profile.freelancerId))
+            .thenReturn(existingMatch)
+
+        // When
+        service.handle(command)
+
+        // Then
+        verify(matchResultRepository, never()).save(any())
+        verify(matchEventPublisher, never()).publish(any())
+    }
+
+    @Test
+    fun `a changed score updates the existing match instead of creating a new one`() {
+        // Given
+        val profile = ProfileSnapshot(
+            freelancerId = FreelancerId(UUID.randomUUID()),
+            skills = SkillSet.of("kotlin", "spring"),
+            expectedDailyRate = Money.of(500.0),
+        )
+        whenever(profileSnapshotRepository.findAll()).thenReturn(listOf(profile))
+
+        val command = MissionPublishedCommand(
+            missionId = MissionId(UUID.randomUUID()),
+            requiredSkills = setOf("kotlin", "spring"),
+            dailyRateAmount = BigDecimal.valueOf(600),
+            dailyRateCurrency = "EUR",
+        )
+
+        val staleMatch = MatchResult.compute(command.missionId, profile.freelancerId, MatchingScore(0.5))
+        whenever(matchResultRepository.findByMissionIdAndFreelancerId(command.missionId, profile.freelancerId))
+            .thenReturn(staleMatch)
+
+        // When
+        service.handle(command)
+
+        // Then
+        val savedCaptor = argumentCaptor<MatchResult>()
+        verify(matchResultRepository).save(savedCaptor.capture())
+        assertThat(savedCaptor.firstValue.id).isEqualTo(staleMatch.id)
+        assertThat(savedCaptor.firstValue.score).isNotEqualTo(staleMatch.score)
     }
 
     @Test
