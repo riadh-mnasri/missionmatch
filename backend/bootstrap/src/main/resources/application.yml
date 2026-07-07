@@ -31,4 +31,8 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: com.missionmatch.*
-        spring.json.type.mapping: "mission-published:com.missionmatch.matching.infrastructure.adapter.input.messaging.MissionPublishedIntegrationEvent,mission-closed:com.missionmatch.matching.infrastructure.adapter.input.messaging.MissionClosedIntegrationEvent,profile-updated:com.missionmatch.matching.infrastructure.adapter.input.messaging.ProfileUpdatedIntegrationEvent,match-computed:com.missionmatch.applicationtracking.infrastructure.adapter.input.messaging.MatchComputedIntegrationEvent"
+        # match-computed is deliberately absent here: it has two independent consumers
+        # (ApplicationTracking, Notification), each with its own anti-corruption DTO, so a
+        # single global alias -> class mapping can't serve both. Each defines its own
+        # container factory instead (see MatchComputedConsumerConfiguration in each module).
+        spring.json.type.mapping: "mission-published:com.missionmatch.matching.infrastructure.adapter.input.messaging.MissionPublishedIntegrationEvent,mission-closed:com.missionmatch.matching.infrastructure.adapter.input.messaging.MissionClosedIntegrationEvent,profile-updated:com.missionmatch.matching.infrastructure.adapter.input.messaging.ProfileUpdatedIntegrationEvent,candidature-status-changed:com.missionmatch.notification.infrastructure.adapter.input.messaging.CandidatureStatusChangedIntegrationEvent"

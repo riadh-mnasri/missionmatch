@@ -1,19 +1,16 @@
 plugins {
     kotlin("plugin.spring")
-    kotlin("plugin.jpa")
 }
 
 dependencies {
     api(project(":shared-kernel"))
 
-    implementation("org.springframework.boot:spring-boot-starter-web")
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    // No web starter, no JPA, no Postgres: this context has no aggregate, no state worth
+    // persisting, and no REST API. It only consumes Kafka events and sends notifications.
+    implementation("org.springframework.boot:spring-boot-starter")
     implementation("org.springframework.kafka:spring-kafka")
-
-    runtimeOnly("org.postgresql:postgresql")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
-    testImplementation("org.testcontainers:junit-jupiter")
-    testImplementation("org.testcontainers:postgresql")
 }
