@@ -12,3 +12,7 @@ data class MissionPublishedIntegrationEvent(
     val dailyRateCurrency: String,
     val startDate: LocalDate,
 )
+
+data class MissionClosedIntegrationEvent(
+    val missionId: UUID,
+)

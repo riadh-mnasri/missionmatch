@@ -31,4 +31,4 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: com.missionmatch.*
-        spring.json.type.mapping: "mission-published:com.missionmatch.matching.infrastructure.adapter.input.messaging.MissionPublishedIntegrationEvent,profile-updated:com.missionmatch.matching.infrastructure.adapter.input.messaging.ProfileUpdatedIntegrationEvent"
+        spring.json.type.mapping: "mission-published:com.missionmatch.matching.infrastructure.adapter.input.messaging.MissionPublishedIntegrationEvent,mission-closed:com.missionmatch.matching.infrastructure.adapter.input.messaging.MissionClosedIntegrationEvent,profile-updated:com.missionmatch.matching.infrastructure.adapter.input.messaging.ProfileUpdatedIntegrationEvent"

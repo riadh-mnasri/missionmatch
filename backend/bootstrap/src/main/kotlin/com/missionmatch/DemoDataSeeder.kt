@@ -24,11 +24,18 @@ class DemoDataSeeder(
 
     override fun run(vararg args: String?) {
         val publishedIds = DEMO_MISSIONS.map { publishMissionUseCase.publish(it) }
+
+        // mission-published and mission-closed are two different Kafka topics with no ordering
+        // guarantee between them: closing a mission right after publishing it can race ahead of
+        // Matching having created the snapshot, so the close would silently no-op. Give Matching
+        // time to consume mission-published before we close anything.
+        Thread.sleep(2000)
+
         CLOSED_MISSION_INDICES.forEach { index -> closeMissionUseCase.close(publishedIds[index]) }
 
-        // Give Matching's Kafka consumer time to build its mission read model before we
-        // seed a profile, since matches are only computed against missions it already knows.
-        Thread.sleep(2000)
+        // Same reasoning before seeding a profile: matches are only computed against missions
+        // Matching already knows about, open or closed.
+        Thread.sleep(1500)
 
         updateProfileUseCase.update(
             UpdateProfileCommand(
@@ -96,9 +103,6 @@ class DemoDataSeeder(
             ),
         )
 
-        // Indices chosen to not overlap with the demo freelancer's skills: Matching does not
-        // yet consume MissionClosed (see README roadmap), so a closed mission that did overlap
-        // would still show up as a high-scoring match, which would be a confusing demo.
         private val CLOSED_MISSION_INDICES = setOf(1, 3)
     }
 }

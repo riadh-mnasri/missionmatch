@@ -1,5 +1,6 @@
 package com.missionmatch.matching.application
 
+import com.missionmatch.matching.application.port.input.MissionClosedCommand
 import com.missionmatch.matching.application.port.input.MissionPublishedCommand
 import com.missionmatch.matching.application.port.input.ProfileUpdatedCommand
 import com.missionmatch.matching.application.port.output.MatchEventPublisher
@@ -197,6 +198,95 @@ class MatchingApplicationServiceTest {
         verify(matchResultRepository).save(savedCaptor.capture())
         assertThat(savedCaptor.firstValue.id).isEqualTo(staleMatch.id)
         assertThat(savedCaptor.firstValue.score).isNotEqualTo(staleMatch.score)
+    }
+
+    @Test
+    fun `reprocessing mission-published after the mission was closed does not reopen it`() {
+        // Given
+        val missionId = MissionId(UUID.randomUUID())
+        val closedSnapshot = MissionSnapshot(
+            missionId = missionId,
+            requiredSkills = SkillSet.of("kotlin"),
+            dailyRate = Money.of(600.0),
+            open = false,
+        )
+        whenever(missionSnapshotRepository.findById(missionId)).thenReturn(closedSnapshot)
+        whenever(profileSnapshotRepository.findAll()).thenReturn(emptyList())
+
+        val command = MissionPublishedCommand(
+            missionId = missionId,
+            requiredSkills = setOf("kotlin"),
+            dailyRateAmount = BigDecimal.valueOf(600),
+            dailyRateCurrency = "EUR",
+        )
+
+        // When
+        service.handle(command)
+
+        // Then
+        val savedCaptor = argumentCaptor<MissionSnapshot>()
+        verify(missionSnapshotRepository).save(savedCaptor.capture())
+        assertThat(savedCaptor.firstValue.open).isFalse()
+    }
+
+    @Test
+    fun `a closed mission is no longer eligible when a new profile is scored`() {
+        // Given
+        val missionId = MissionId(UUID.randomUUID())
+        val openMission = MissionSnapshot(
+            missionId = missionId,
+            requiredSkills = SkillSet.of("kotlin"),
+            dailyRate = Money.of(600.0),
+            open = true,
+        )
+        whenever(missionSnapshotRepository.findById(missionId)).thenReturn(openMission)
+
+        // When
+        service.handle(MissionClosedCommand(missionId))
+
+        // Then
+        val savedCaptor = argumentCaptor<MissionSnapshot>()
+        verify(missionSnapshotRepository).save(savedCaptor.capture())
+        assertThat(savedCaptor.firstValue.open).isFalse()
+    }
+
+    @Test
+    fun `closing a mission before its snapshot exists still records the closure marker`() {
+        // Given
+        val missionId = MissionId(UUID.randomUUID())
+        whenever(missionSnapshotRepository.findById(missionId)).thenReturn(null)
+
+        // When
+        service.handle(MissionClosedCommand(missionId))
+
+        // Then
+        verify(missionSnapshotRepository).markClosed(missionId)
+        verify(missionSnapshotRepository, never()).save(any())
+    }
+
+    @Test
+    fun `a mission published after it was already marked closed is created as closed`() {
+        // Given: MissionClosed arrived first (different Kafka topic, no ordering guarantee)
+        // and found no snapshot yet, so it only recorded the closure marker.
+        val missionId = MissionId(UUID.randomUUID())
+        whenever(missionSnapshotRepository.isMarkedClosed(missionId)).thenReturn(true)
+        whenever(missionSnapshotRepository.findById(missionId)).thenReturn(null)
+        whenever(profileSnapshotRepository.findAll()).thenReturn(emptyList())
+
+        val command = MissionPublishedCommand(
+            missionId = missionId,
+            requiredSkills = setOf("kotlin"),
+            dailyRateAmount = BigDecimal.valueOf(600),
+            dailyRateCurrency = "EUR",
+        )
+
+        // When
+        service.handle(command)
+
+        // Then
+        val savedCaptor = argumentCaptor<MissionSnapshot>()
+        verify(missionSnapshotRepository).save(savedCaptor.capture())
+        assertThat(savedCaptor.firstValue.open).isFalse()
     }
 
     @Test

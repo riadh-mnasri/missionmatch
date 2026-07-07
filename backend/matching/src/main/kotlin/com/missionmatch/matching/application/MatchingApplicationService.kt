@@ -1,8 +1,10 @@
 package com.missionmatch.matching.application
 
 import com.missionmatch.matching.application.port.input.GetMatchesUseCase
+import com.missionmatch.matching.application.port.input.HandleMissionClosedUseCase
 import com.missionmatch.matching.application.port.input.HandleMissionPublishedUseCase
 import com.missionmatch.matching.application.port.input.HandleProfileUpdatedUseCase
+import com.missionmatch.matching.application.port.input.MissionClosedCommand
 import com.missionmatch.matching.application.port.input.MissionPublishedCommand
 import com.missionmatch.matching.application.port.input.ProfileUpdatedCommand
 import com.missionmatch.matching.application.port.output.MatchEventPublisher
@@ -24,18 +26,32 @@ class MatchingApplicationService(
     private val matchResultRepository: MatchResultRepository,
     private val matchEventPublisher: MatchEventPublisher,
     private val matchingPolicy: MatchingPolicy,
-) : HandleMissionPublishedUseCase, HandleProfileUpdatedUseCase, GetMatchesUseCase {
+) : HandleMissionPublishedUseCase, HandleMissionClosedUseCase, HandleProfileUpdatedUseCase, GetMatchesUseCase {
 
     override fun handle(command: MissionPublishedCommand) {
+        // mission-published and mission-closed are different Kafka topics with no ordering
+        // guarantee between them: MissionClosed can arrive and be processed first. isMarkedClosed
+        // captures that fact even before a snapshot exists, so a mission is never resurrected as
+        // open just because its "published" event happened to be consumed second.
+        val open = when {
+            missionSnapshotRepository.isMarkedClosed(command.missionId) -> false
+            else -> missionSnapshotRepository.findById(command.missionId)?.open ?: true
+        }
         val mission = MissionSnapshot(
             missionId = command.missionId,
             requiredSkills = SkillSet.of(command.requiredSkills),
             dailyRate = Money(command.dailyRateAmount, command.dailyRateCurrency),
-            open = true,
+            open = open,
         )
         missionSnapshotRepository.save(mission)
 
         profileSnapshotRepository.findAll().forEach { profile -> computeAndPublish(mission, profile) }
+    }
+
+    override fun handle(command: MissionClosedCommand) {
+        missionSnapshotRepository.markClosed(command.missionId)
+        val mission = missionSnapshotRepository.findById(command.missionId) ?: return
+        missionSnapshotRepository.save(mission.copy(open = false))
     }
 
     override fun handle(command: ProfileUpdatedCommand) {
