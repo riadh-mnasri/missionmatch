@@ -157,11 +157,12 @@ Why events instead of direct REST calls between contexts? Two reasons this proje
 
 The tradeoff, and the reason this is worth learning deliberately rather than defaulting to REST everywhere: eventual consistency. A freelancer might see a mission in Sourcing for a few hundred milliseconds before a match appears - the UI must be built to tolerate that, not assume synchronous consistency.
 
-Three consequences of choreography and at-least-once delivery that this project ran into for real (not hypothetically) while building it:
+Four consequences of choreography and at-least-once delivery that this project ran into for real (not hypothetically) while building it:
 
 - **Every context's view of the world can silently drift from the source of truth** if it doesn't subscribe to the events that keep it current. Matching originally only consumed `MissionPublished` and `ProfileUpdated` - a mission closed in Sourcing stayed "open" in Matching's own read model and could still surface as a fresh match. Fixed by also consuming `MissionClosed`.
 - **Different topics have no ordering guarantee relative to each other, even when one event logically depends on another.** Fixing the gap above by naively consuming `MissionClosed` wasn't enough on its own: `mission-published` and `mission-closed` are different topics, so `MissionClosed` can be consumed *before* `MissionPublished` has created the snapshot it's supposed to close, since each topic-partition's consumer becomes ready independently. The fix isn't "wait a bit" - it's a small `closed_mission_markers` table Matching writes to unconditionally on `MissionClosed`, regardless of whether a snapshot exists yet; `MissionPublished`'s handler checks it before deciding whether the mission it's about to create a snapshot for should start out open or already closed. Correct regardless of which event arrives first.
 - **Kafka's at-least-once delivery means consumers must be idempotent.** Reprocessing the same event (a consumer rebalance is enough to trigger it) must not corrupt state. `match_results` has a unique constraint on `(mission_id, freelancer_id)`, and the repository adapter treats a constraint violation as "someone else already recorded this" rather than an error - discovered by running the real system with real Kafka, not by reasoning about it in the abstract.
+- **A shared global type mapping can't serve two consumers of the same topic that each want their own DTO.** Once `match-computed` genuinely had two independent consumers (ApplicationTracking and Notification, each with its own anti-corruption event class), Spring's single `spring.json.type.mapping` property could only point the alias at one of them. The fix is a dedicated `ConcurrentKafkaListenerContainerFactory` per consumer, each with its own `JsonDeserializer` bound to its own target class - Kafka doesn't require every consumer group reading a topic to deserialize it the same way, since deserialization is a client-side concern per consumer group, not a property of the topic itself.
 
 ---
 
@@ -191,7 +192,7 @@ missionmatch/
 │   ├── freelancer-profile/             # fully wired: domain, application, infrastructure
 │   ├── matching/                       # fully wired: domain, application, infrastructure
 │   ├── application-tracking/           # fully wired: domain, application, infrastructure
-│   ├── notification/                   # empty module skeleton, not implemented yet
+│   ├── notification/                   # fully wired: no aggregate, no persistence, no REST
 │   └── bootstrap/              # the single deployable Spring Boot app wiring every module together
 ├── frontend/
 │   └── src/app/
@@ -407,8 +408,9 @@ Secrets (DB credentials, Kafka auth) live in AWS Secrets Manager and are injecte
 - [x] Angular: profile page (skills + expected daily rate, backed by a per-browser local identity since there's no auth yet)
 - [x] Have Matching consume `MissionClosed` so its read model doesn't drift from Sourcing's
 - [x] Wire `application-tracking` end to end (candidature pipeline, consumes `MatchComputed`)
+- [x] Wire `notification` (logs instead of real email/Slack, but consumes both `MatchComputed` and `CandidatureStatusChanged` for real) - all five bounded contexts are now fully implemented
 - [ ] Angular: application pipeline kanban for the candidature statuses `application-tracking` already tracks
-- [ ] Wire `notification` (the last empty context) so `candidature-status-changed` has a consumer
+- [ ] Swap `LoggingNotificationSender` for a real email/Slack adapter behind the same `NotificationSender` port
 - [ ] Terraform `dev` environment, deployed end-to-end
 - [ ] Optional: introduce Cucumber for living-documentation acceptance tests
 - [ ] Optional: extract one context (e.g. Notification) into its own microservice, as a worked example of the monolith-to-microservice split
