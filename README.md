@@ -52,7 +52,7 @@ MissionMatch has five bounded contexts:
 | Context | Aggregate root | Owns | Publishes | Listens to |
 |---|---|---|---|---|
 | **Sourcing** | `Mission` | Mission lifecycle: created, open, closed | `MissionPublished`, `MissionClosed` | - |
-| **FreelancerProfile** | `Profile` | Skills, daily rate range, availability | `ProfileUpdated` | - |
+| **FreelancerProfile** | `Profile` | Skills, expected daily rate | `ProfileUpdated` | - |
 | **Matching** | `MatchResult` | Scoring algorithm, match history | `MatchComputed` | `MissionPublished`, `ProfileUpdated` |
 | **ApplicationTracking** | `Candidature` | Pipeline status (kanban) | `CandidatureStatusChanged` | `MatchComputed` |
 | **Notification** | *(no aggregate - a "leaf" context)* | Email/Slack delivery | - | `MatchComputed`, `CandidatureStatusChanged` |
@@ -140,8 +140,8 @@ Contexts communicate exclusively through **domain events** published to Kafka, u
 | Topic | Producer | Consumers | Payload (essentials) |
 |---|---|---|---|
 | `mission-published` | Sourcing | Matching | missionId, requiredSkills, dailyRate, startDate |
-| `mission-closed` | Sourcing | Matching | missionId |
-| `profile-updated` | FreelancerProfile | Matching | freelancerId, skills, dailyRateRange, availability |
+| `mission-closed` | Sourcing | *(none yet - known gap, see Roadmap)* | missionId |
+| `profile-updated` | FreelancerProfile | Matching | freelancerId, skills, expectedDailyRate |
 | `match-computed` | Matching | ApplicationTracking, Notification | missionId, freelancerId, score |
 | `candidature-status-changed` | ApplicationTracking | Notification | candidatureId, previousStatus, newStatus |
 
@@ -151,6 +151,11 @@ Why events instead of direct REST calls between contexts? Two reasons this proje
 2. **Multiple consumers, one producer** - `match-computed` has two independent consumers today (ApplicationTracking, Notification) and could gain a third tomorrow (e.g. an analytics context) without ApplicationTracking's producer ever knowing or changing.
 
 The tradeoff, and the reason this is worth learning deliberately rather than defaulting to REST everywhere: eventual consistency. A freelancer might see a mission in Sourcing for a few hundred milliseconds before a match appears - the UI must be built to tolerate that, not assume synchronous consistency.
+
+Two consequences of choreography and at-least-once delivery that this project ran into for real (not hypothetically) while building it:
+
+- **Matching doesn't yet consume `MissionClosed`.** A mission closed in Sourcing stays "open" in Matching's own read model until that gap is closed, so it can still surface as a fresh match. This is an intentional, tracked gap (see Roadmap), not an oversight - it exists to make the point that choreography means every context's view of the world can drift from the source of truth until it explicitly subscribes to the events that keep it current.
+- **Kafka's at-least-once delivery means consumers must be idempotent.** Reprocessing the same event (a consumer rebalance is enough to trigger it) must not corrupt state. `match_results` has a unique constraint on `(mission_id, freelancer_id)`, and the repository adapter treats a constraint violation as "someone else already recorded this" rather than an error - discovered by running the real system with real Kafka, not by reasoning about it in the abstract.
 
 ---
 
@@ -292,7 +297,8 @@ Each context exposes its own REST resource under an `/api` prefix; there is no A
 | `GET` | `/api/missions` | Sourcing | List all missions |
 | `GET` | `/api/missions/{id}` | Sourcing | Fetch mission details |
 | `POST` | `/api/missions/{id}/close` | Sourcing | Close a mission |
-| `PUT` | `/api/profile` | FreelancerProfile | Update skills/rate/availability |
+| `PUT` | `/api/profile/{freelancerId}` | FreelancerProfile | Create or update a profile (skills, expected daily rate) |
+| `GET` | `/api/profile/{freelancerId}` | FreelancerProfile | Fetch a profile |
 | `GET` | `/api/matches?freelancerId=` | Matching | List matches for a freelancer |
 | `GET` | `/api/candidatures?freelancerId=` | ApplicationTracking | List pipeline entries |
 | `PATCH` | `/api/candidatures/{id}/status` | ApplicationTracking | Move a candidature to another pipeline stage |
@@ -361,9 +367,11 @@ Secrets (DB credentials, Kafka auth) live in AWS Secrets Manager and are injecte
 - [x] Scaffold Gradle multi-module backend with the `sourcing` context fully wired (domain → application → infrastructure)
 - [x] Add `docker-compose.yml` (Postgres + Kafka) for local development
 - [x] Add the Matching scoring algorithm with full TDD test suite
-- [ ] Wire `freelancer-profile` end to end and publish real `ProfileUpdated` events
+- [x] Wire `freelancer-profile` end to end and publish real `ProfileUpdated` events
 - [x] Angular dashboard: mission list + publish form, match lookup by freelancer id
-- [ ] Angular: profile management and application pipeline kanban, once their backend contexts exist
+- [ ] Angular: profile management page (currently profile is created via the API only, e.g. by the demo seeder)
+- [ ] Have Matching consume `MissionClosed` so its read model doesn't drift from Sourcing's
+- [ ] Angular: application pipeline kanban, once `application-tracking` exists
 - [ ] Terraform `dev` environment, deployed end-to-end
 - [ ] Optional: introduce Cucumber for living-documentation acceptance tests
 - [ ] Optional: extract one context (e.g. Notification) into its own microservice, as a worked example of the monolith-to-microservice split
