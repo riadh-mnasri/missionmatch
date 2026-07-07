@@ -23,7 +23,7 @@ spring:
       properties:
         # Type aliases, not producers' Java class names, travel on the wire: consumers map
         # the same alias to their own local DTO, so no context depends on another's classes.
-        spring.json.type.mapping: "mission-published:com.missionmatch.sourcing.domain.event.MissionPublished,mission-closed:com.missionmatch.sourcing.domain.event.MissionClosed,match-computed:com.missionmatch.matching.domain.event.MatchComputed,profile-updated:com.missionmatch.freelancerprofile.domain.event.ProfileUpdated"
+        spring.json.type.mapping: "mission-published:com.missionmatch.sourcing.domain.event.MissionPublished,mission-closed:com.missionmatch.sourcing.domain.event.MissionClosed,match-computed:com.missionmatch.matching.domain.event.MatchComputed,profile-updated:com.missionmatch.freelancerprofile.domain.event.ProfileUpdated,candidature-status-changed:com.missionmatch.applicationtracking.domain.event.CandidatureStatusChanged"
     consumer:
       group-id: missionmatch
       auto-offset-reset: earliest
@@ -31,4 +31,4 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: com.missionmatch.*
-        spring.json.type.mapping: "mission-published:com.missionmatch.matching.infrastructure.adapter.input.messaging.MissionPublishedIntegrationEvent,mission-closed:com.missionmatch.matching.infrastructure.adapter.input.messaging.MissionClosedIntegrationEvent,profile-updated:com.missionmatch.matching.infrastructure.adapter.input.messaging.ProfileUpdatedIntegrationEvent"
+        spring.json.type.mapping: "mission-published:com.missionmatch.matching.infrastructure.adapter.input.messaging.MissionPublishedIntegrationEvent,mission-closed:com.missionmatch.matching.infrastructure.adapter.input.messaging.MissionClosedIntegrationEvent,profile-updated:com.missionmatch.matching.infrastructure.adapter.input.messaging.ProfileUpdatedIntegrationEvent,match-computed:com.missionmatch.applicationtracking.infrastructure.adapter.input.messaging.MatchComputedIntegrationEvent"

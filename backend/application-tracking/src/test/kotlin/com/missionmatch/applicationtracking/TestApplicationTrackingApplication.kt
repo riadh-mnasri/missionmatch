@@ -1,0 +1,6 @@
+package com.missionmatch.applicationtracking
+
+import org.springframework.boot.autoconfigure.SpringBootApplication
+
+@SpringBootApplication
+class TestApplicationTrackingApplication
