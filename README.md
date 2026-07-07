@@ -103,33 +103,38 @@ Every module is split into three concentric layers:
 
 - **`domain`** - pure Kotlin, zero framework imports. Aggregates, value objects, domain events and domain services live here. This code should compile even if you deleted Spring Boot from the classpath.
 - **`application`** - orchestrates domain objects to fulfill a use case (e.g. "compute a match"). It defines two kinds of **ports** (interfaces):
-  - **Input ports** (`port/in`): what the outside world can ask this module to do (e.g. `ComputeMatchUseCase`). Driving adapters call these.
-  - **Output ports** (`port/out`): what this module needs from the outside world (e.g. `MatchResultRepository`, `MatchEventPublisher`). Driven adapters implement these.
+  - **Input ports** (`application/port/input`): what the outside world can ask this module to do (e.g. `HandleMissionPublishedUseCase`). Driving adapters call these. (Named `input`, not `in` - `in` is a reserved keyword in Kotlin.)
+  - **Output ports** (`application/port/output`): what this module needs from the outside world (e.g. `MatchResultRepository`, `MatchEventPublisher`). Driven adapters implement these.
 - **`infrastructure`** - the only layer allowed to depend on frameworks. **Driving adapters** (REST controllers, Kafka consumers) call into input ports. **Driven adapters** (JPA repositories, Kafka producers, email senders) implement output ports.
 
 The dependency rule is: **arrows only point inward.** `infrastructure` depends on `application`, `application` depends on `domain`, and `domain` depends on nothing. This is what lets you unit-test the domain and application layers with zero mocks of infrastructure - you mock the *port interface*, which is a plain Kotlin interface you own, not a database or a broker.
 
-Example for the `matching` module:
+The `matching` module, as it actually exists in the repo:
 
 ```
 matching/
 ├── domain/
-│   ├── MatchResult.kt              # aggregate
-│   ├── MatchingScore.kt            # value object
-│   └── MatchingPolicy.kt           # domain service: the actual scoring rules
+│   ├── MatchResult.kt                          # aggregate
+│   ├── MatchingScore.kt                        # value object
+│   └── MatchingPolicy.kt                       # domain service: the actual scoring rules
 ├── application/
-│   ├── port/in/ComputeMatchUseCase.kt
-│   ├── port/out/MatchResultRepository.kt
-│   ├── port/out/MatchEventPublisher.kt
-│   └── ComputeMatchService.kt      # implements the use case
+│   ├── port/input/HandleMissionPublishedUseCase.kt
+│   ├── port/input/HandleProfileUpdatedUseCase.kt
+│   ├── port/input/GetMatchesUseCase.kt
+│   ├── port/output/MissionSnapshotRepository.kt
+│   ├── port/output/ProfileSnapshotRepository.kt
+│   ├── port/output/MatchResultRepository.kt
+│   ├── port/output/MatchEventPublisher.kt
+│   └── MatchingApplicationService.kt           # implements all three input ports
 └── infrastructure/
-    ├── adapter/in/messaging/MissionPublishedConsumer.kt
-    ├── adapter/in/web/MatchController.kt
-    ├── adapter/out/persistence/JpaMatchResultRepository.kt
-    └── adapter/out/messaging/KafkaMatchEventPublisher.kt
+    ├── adapter/input/messaging/MissionPublishedConsumer.kt
+    ├── adapter/input/messaging/ProfileUpdatedConsumer.kt
+    ├── adapter/input/web/MatchController.kt
+    ├── adapter/output/persistence/MatchResultRepositoryAdapter.kt
+    └── adapter/output/messaging/KafkaMatchEventPublisher.kt
 ```
 
-Note that `MissionPublishedConsumer` (Kafka) and `MatchController` (REST) are two different adapters calling the *same* use case. That's the point of the pattern: the business rule for computing a match doesn't change depending on who's asking.
+Note that `MissionPublishedConsumer` (Kafka), `ProfileUpdatedConsumer` (Kafka) and `MatchController` (REST) are three different adapters all calling into the *same* application service. That's the point of the pattern: the business rule for computing a match doesn't change depending on who's asking.
 
 ---
 
@@ -167,7 +172,7 @@ Two consequences of choreography and at-least-once delivery that this project ra
 | Backend framework | Spring Boot | Dependency injection wires adapters to ports without the domain knowing |
 | Messaging | Apache Kafka (Amazon MSK Serverless in AWS) | Durable, replayable event log - fits choreography naturally |
 | Persistence | PostgreSQL (via Spring Data JPA) | One instance, one schema per bounded context |
-| Frontend | Angular | Component-based dashboard: missions, matches, pipeline kanban |
+| Frontend | Angular (standalone components, signals) | Missions, Profile and Matches pages today; pipeline kanban once `application-tracking` exists |
 | Unit/integration testing | JUnit 5, Mockito, AssertJ | See [Testing strategy](#testing-strategy) |
 | Integration testing infra | Testcontainers (Postgres, Kafka) | Tests run against real engines, not mocks, without needing shared infra |
 | Infrastructure as Code | Terraform | AWS provisioning, versioned and reviewable like code |
@@ -181,22 +186,23 @@ missionmatch/
 ├── backend/
 │   ├── settings.gradle.kts
 │   ├── shared-kernel/          # cross-context value objects & event envelope (SkillSet, Money, EventMetadata)
-│   ├── sourcing/
-│   ├── freelancer-profile/
-│   ├── matching/
-│   ├── application-tracking/
-│   ├── notification/
+│   ├── sourcing/                       # fully wired: domain, application, infrastructure
+│   ├── freelancer-profile/             # fully wired: domain, application, infrastructure
+│   ├── matching/                       # fully wired: domain, application, infrastructure
+│   ├── application-tracking/           # empty module skeleton, not implemented yet
+│   ├── notification/                   # empty module skeleton, not implemented yet
 │   └── bootstrap/              # the single deployable Spring Boot app wiring every module together
 ├── frontend/
-│   └── src/app/{missions,profile,matches,applications,core}/
-├── infra/terraform/
-│   ├── modules/{network,ecs-service,rds,msk,frontend-hosting,observability}/
-│   ├── environments/{dev,prod}/
-│   └── backend.tf              # remote state: S3 + DynamoDB lock
-├── docs/
-│   ├── adr/                    # Architecture Decision Records
-│   └── context-map.md
-└── .github/workflows/          # CI: build & test, terraform plan/apply
+│   └── src/app/
+│       ├── missions/            # publish/list/close missions
+│       ├── profile/             # create/update the local freelancer's profile
+│       ├── matches/             # look up matches by freelancer id
+│       └── shared/              # sidebar, chip-input, status-badge, tag colors, ...
+├── docker-compose.yml           # Postgres + Kafka for local development
+└── infra/terraform/             # not implemented yet, see Roadmap
+    ├── modules/{network,ecs-service,rds,msk,frontend-hosting,observability}/
+    ├── environments/{dev,prod}/
+    └── backend.tf              # remote state: S3 + DynamoDB lock
 ```
 
 `shared-kernel` is intentionally tiny. In DDD, a **shared kernel** is a piece of model that multiple contexts agree to share - it should stay small and stable, because every context depending on it now has to agree before it changes. Here it only holds truly universal, stable concepts (a `Money` value object, an event envelope with correlation IDs) - never a `Mission` or a `Profile`.
@@ -218,15 +224,19 @@ Aggregates and value objects are plain Kotlin with business rules (e.g. "a match
 
 ```kotlin
 @Test
-fun `mission is eligible for matching when it is open`() {
+fun `a published mission is open and eligible for matching`() {
     // Given
-    val mission = Mission.publish(title = "Kotlin backend dev", skills = setOf("Kotlin", "Spring"))
+    val mission = Mission.publish(
+        title = "Kotlin backend developer",
+        clientName = "Acme Corp",
+        requiredSkills = SkillSet.of("kotlin", "spring"),
+        dailyRate = Money.of(600.0),
+        startDate = LocalDate.now().plusWeeks(2),
+    )
 
-    // When
-    val eligible = mission.isEligibleForMatching()
-
-    // Then
-    assertThat(eligible).isTrue()
+    // When / Then
+    assertThat(mission.status).isEqualTo(MissionStatus.OPEN)
+    assertThat(mission.isEligibleForMatching()).isTrue()
 }
 ```
 
@@ -235,17 +245,22 @@ Use cases (application services) are tested with **JUnit 5 + Mockito**, mocking 
 
 ```kotlin
 @Test
-fun `publishes MatchComputed when score exceeds threshold`() {
+fun `a below-threshold score is neither persisted nor published`() {
     // Given
-    val repository = mock<MatchResultRepository>()
-    val publisher = mock<MatchEventPublisher>()
-    val service = ComputeMatchService(repository, publisher, MatchingPolicy())
+    val nonMatchingProfile = ProfileSnapshot(
+        freelancerId = FreelancerId(UUID.randomUUID()),
+        skills = SkillSet.of("php"),
+        expectedDailyRate = Money.of(500.0),
+    )
+    whenever(profileSnapshotRepository.findAll()).thenReturn(listOf(nonMatchingProfile))
+    val command = MissionPublishedCommand(/* ... */)
 
     // When
-    service.compute(mission, profile)
+    service.handle(command)
 
     // Then
-    verify(publisher).publish(any<MatchComputed>())
+    verify(matchResultRepository, never()).save(any())
+    verify(matchEventPublisher, never()).publish(any())
 }
 ```
 
@@ -254,23 +269,27 @@ Adapters are tested against **real** Postgres and Kafka using **Testcontainers**
 
 ```kotlin
 @Testcontainers
-class JpaMatchResultRepositoryTest {
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+class MissionRepositoryAdapterTest {
 
-    @Container
-    val postgres = PostgreSQLContainer("postgres:16")
+    companion object {
+        @Container
+        @JvmStatic
+        val postgres = PostgreSQLContainer("postgres:16-alpine")
+    }
 
     @Test
-    fun `persists and retrieves a match result`() {
+    fun `persists a mission and retrieves it back by id`() {
         // Given
-        val repository = JpaMatchResultRepository(entityManager)
-        val match = MatchResult(missionId, freelancerId, score = 0.85)
+        val mission = Mission.publish(/* ... */)
 
         // When
-        repository.save(match)
-        val found = repository.findByMissionId(missionId)
+        repository.save(mission)
+        val found = repository.findById(mission.id)
 
         // Then
-        assertThat(found?.score).isEqualTo(0.85)
+        assertThat(found?.title).isEqualTo(mission.title)
     }
 }
 ```
@@ -322,6 +341,16 @@ Ports are deliberately non-default to avoid clashing with other projects running
 
 A `docker-compose.yml` at the repo root provisions Postgres and a single-broker Kafka, matching what Testcontainers spins up in tests - the goal is that "it passed the integration tests" and "it works locally" rely on the same infrastructure shape.
 
+### Seeing it with real data
+
+An empty app is a poor demo. Run the backend with the `demo` Spring profile and a `DemoDataSeeder` publishes six realistic missions (two of them closed) and creates a matching freelancer profile through the real REST-and-Kafka path, exactly like a user would:
+
+```bash
+cd backend && ./gradlew :bootstrap:bootRun --args='--spring.profiles.active=demo'
+```
+
+The seeded freelancer id is `11111111-1111-1111-1111-111111111111` if you want to look it up directly; visiting the Matches page in a fresh browser will instead show *your own* browser's (empty, until you fill in the Profile page) local identity.
+
 ---
 
 ## Infrastructure & deployment (AWS + Terraform)
@@ -369,7 +398,7 @@ Secrets (DB credentials, Kafka auth) live in AWS Secrets Manager and are injecte
 - [x] Add the Matching scoring algorithm with full TDD test suite
 - [x] Wire `freelancer-profile` end to end and publish real `ProfileUpdated` events
 - [x] Angular dashboard: mission list + publish form, match lookup by freelancer id
-- [ ] Angular: profile management page (currently profile is created via the API only, e.g. by the demo seeder)
+- [x] Angular: profile page (skills + expected daily rate, backed by a per-browser local identity since there's no auth yet)
 - [ ] Have Matching consume `MissionClosed` so its read model doesn't drift from Sourcing's
 - [ ] Angular: application pipeline kanban, once `application-tracking` exists
 - [ ] Terraform `dev` environment, deployed end-to-end
