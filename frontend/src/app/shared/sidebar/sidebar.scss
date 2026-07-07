@@ -1,0 +1,117 @@
+.sidebar {
+  width: 248px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--sidebar-bg);
+  padding: 1.4rem 1rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+
+  &__brand {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.5rem 0.6rem 1.6rem;
+  }
+
+  &__brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    background: var(--color-primary);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(180, 83, 9, 0.4);
+
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+  }
+
+  &__brand-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+  }
+
+  &__brand-name {
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.98rem;
+    letter-spacing: -0.01em;
+  }
+
+  &__brand-tag {
+    color: var(--sidebar-text-muted);
+    font-size: 0.72rem;
+    font-weight: 500;
+  }
+
+  &__nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  &__link {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.6rem 0.7rem;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: var(--sidebar-text);
+    font-weight: 600;
+    font-size: 0.88rem;
+    transition: background 0.15s ease, color 0.15s ease;
+
+    &:hover {
+      background: var(--sidebar-bg-elevated);
+      color: #fff;
+    }
+
+    &--active {
+      background: var(--color-primary);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(180, 83, 9, 0.35);
+
+      &:hover {
+        background: var(--color-primary);
+      }
+    }
+  }
+
+  &__icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+
+  &__footer {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem;
+    color: var(--sidebar-text-muted);
+    font-size: 0.72rem;
+    font-weight: 500;
+    border-top: 1px solid var(--sidebar-border);
+    padding-top: 1rem;
+  }
+
+  &__footer-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #34d399;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18);
+  }
+}

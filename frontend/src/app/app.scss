@@ -1,0 +1,14 @@
+:host {
+  display: block;
+}
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+  align-items: stretch;
+
+  &__content {
+    flex: 1;
+    min-width: 0;
+  }
+}

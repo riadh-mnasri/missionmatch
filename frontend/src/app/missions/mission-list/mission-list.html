@@ -1,8 +1,26 @@
 <section class="page">
   <header class="page__header">
-    <h1>Missions</h1>
+    <span class="page__eyebrow">Sourcing</span>
+    <h1 class="page__title">Missions</h1>
     <p class="page__subtitle">Publish a mission and track which ones are still open.</p>
   </header>
+
+  @if (!loading() && !errorMessage() && missions().length > 0) {
+    <div class="stats">
+      <div class="stat-tile">
+        <span class="stat-tile__label">Total missions</span>
+        <span class="stat-tile__value">{{ missions().length }}</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-tile__label">Open</span>
+        <span class="stat-tile__value">{{ openCount() }}</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-tile__label">Avg. daily rate</span>
+        <span class="stat-tile__value">{{ averageRate() }}€</span>
+      </div>
+    </div>
+  }
 
   <div class="card">
     <h2 class="card__title">Publish a new mission</h2>
@@ -17,11 +35,21 @@
     } @else if (errorMessage()) {
       <p class="error-text">{{ errorMessage() }}</p>
     } @else if (missions().length === 0) {
-      <p class="empty-state">No missions published yet.</p>
+      <div class="empty-state">
+        <span class="empty-state__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="7.5" width="18" height="12" rx="2" />
+            <path d="M8.5 7.5V5.8a1.8 1.8 0 0 1 1.8-1.8h3.4a1.8 1.8 0 0 1 1.8 1.8v1.7" />
+          </svg>
+        </span>
+        <span>No missions published yet. Use the form above to publish your first one.</span>
+      </div>
     } @else {
       <ul class="mission-list">
         @for (mission of missions(); track mission.id) {
-          <li class="mission-card">
+          <li class="mission-card" [class.mission-card--closed]="mission.status === 'CLOSED'">
+            <span class="mission-card__avatar">{{ initials(mission.clientName) }}</span>
+
             <div class="mission-card__main">
               <div class="mission-card__heading">
                 <h3>{{ mission.title }}</h3>
@@ -30,14 +58,14 @@
               <p class="mission-card__client">{{ mission.clientName }}</p>
               <ul class="mission-card__skills">
                 @for (skill of mission.requiredSkills; track skill) {
-                  <li>{{ skill }}</li>
+                  <li [class]="tagColorClass(skill)">{{ skill }}</li>
                 }
               </ul>
             </div>
 
             <div class="mission-card__side">
-              <span class="mission-card__rate">{{ mission.dailyRateAmount }} EUR / day</span>
-              <span class="mission-card__date">Starts {{ mission.startDate }}</span>
+              <span class="mission-card__rate">{{ mission.dailyRateAmount }}€ <small>/ day</small></span>
+              <span class="mission-card__date">{{ relativeDate(mission.startDate) }}</span>
               @if (mission.status === 'OPEN') {
                 <button
                   class="mission-card__close"

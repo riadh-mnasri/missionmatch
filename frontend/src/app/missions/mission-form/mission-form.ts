@@ -1,10 +1,11 @@
 import { Component, inject, output, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MissionService } from '../mission.service';
+import { tagColorClass } from '../../shared/tag-color';
 
 @Component({
   selector: 'app-mission-form',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, FormsModule],
   templateUrl: './mission-form.html',
   styleUrl: './mission-form.scss',
 })
@@ -16,17 +17,46 @@ export class MissionForm {
 
   protected readonly submitting = signal(false);
   protected readonly errorMessage = signal<string | null>(null);
+  protected readonly skills = signal<string[]>([]);
+  protected readonly skillsTouched = signal(false);
+  protected skillDraft = '';
+
+  protected readonly tagColorClass = tagColorClass;
 
   protected readonly form = this.formBuilder.nonNullable.group({
     title: ['', Validators.required],
     clientName: ['', Validators.required],
-    requiredSkills: ['', Validators.required],
     dailyRateAmount: [500, [Validators.required, Validators.min(1)]],
     startDate: ['', Validators.required],
   });
 
+  onSkillKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ',') {
+      event.preventDefault();
+      this.commitSkillDraft();
+    } else if (event.key === 'Backspace' && !this.skillDraft && this.skills().length > 0) {
+      this.skills.update((skills) => skills.slice(0, -1));
+    }
+  }
+
+  commitSkillDraft(): void {
+    const value = this.skillDraft.trim().toLowerCase();
+    this.skillDraft = '';
+    this.skillsTouched.set(true);
+    if (value && !this.skills().includes(value)) {
+      this.skills.update((skills) => [...skills, value]);
+    }
+  }
+
+  removeSkill(skill: string): void {
+    this.skills.update((skills) => skills.filter((s) => s !== skill));
+  }
+
   submit(): void {
-    if (this.form.invalid) {
+    this.commitSkillDraft();
+    this.skillsTouched.set(true);
+
+    if (this.form.invalid || this.skills().length === 0) {
       this.form.markAllAsTouched();
       return;
     }
@@ -39,10 +69,7 @@ export class MissionForm {
       .publish({
         title: value.title,
         clientName: value.clientName,
-        requiredSkills: value.requiredSkills
-          .split(',')
-          .map((skill) => skill.trim())
-          .filter(Boolean),
+        requiredSkills: this.skills(),
         dailyRateAmount: value.dailyRateAmount,
         startDate: value.startDate,
       })
@@ -50,6 +77,8 @@ export class MissionForm {
         next: () => {
           this.submitting.set(false);
           this.form.reset({ dailyRateAmount: 500 });
+          this.skills.set([]);
+          this.skillsTouched.set(false);
           this.published.emit();
         },
         error: () => {

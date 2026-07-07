@@ -1,6 +1,7 @@
 <section class="page">
   <header class="page__header">
-    <h1>Matches</h1>
+    <span class="page__eyebrow">Matching</span>
+    <h1 class="page__title">Matches</h1>
     <p class="page__subtitle">
       Look up the missions matched to a freelancer profile, ranked by score.
     </p>
@@ -33,18 +34,28 @@
       <h2 class="card__title">Results</h2>
 
       @if (matches().length === 0) {
-        <p class="empty-state">No matches found for this freelancer yet.</p>
+        <div class="empty-state">
+          <span class="empty-state__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="8.5" />
+              <circle cx="12" cy="12" r="4.5" />
+              <circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none" />
+            </svg>
+          </span>
+          <span>No matches found for this freelancer yet.</span>
+        </div>
       } @else {
         <ul class="match-list">
           @for (match of matches(); track match.missionId) {
             <li class="match-card">
-              <div>
+              <div class="match-card__info">
                 <p class="match-card__label">Mission</p>
                 <p class="match-card__value">{{ match.missionId }}</p>
               </div>
               <div class="match-card__score">
-                <span class="match-card__score-value">{{ (match.score * 100).toFixed(0) }}%</span>
-                <span class="match-card__score-label">match</span>
+                <div class="score-ring" [style.--score]="match.score">
+                  <span class="score-ring__value">{{ (match.score * 100).toFixed(0) }}%</span>
+                </div>
               </div>
             </li>
           }

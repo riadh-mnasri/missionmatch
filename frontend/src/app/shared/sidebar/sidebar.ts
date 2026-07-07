@@ -2,9 +2,9 @@ import { Component } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 
 @Component({
-  selector: 'app-nav-bar',
+  selector: 'app-sidebar',
   imports: [RouterLink, RouterLinkActive],
-  templateUrl: './nav-bar.html',
-  styleUrl: './nav-bar.scss',
+  templateUrl: './sidebar.html',
+  styleUrl: './sidebar.scss',
 })
-export class NavBar {}
+export class Sidebar {}

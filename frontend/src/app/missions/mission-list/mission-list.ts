@@ -1,8 +1,11 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { MissionForm } from '../mission-form/mission-form';
 import { MissionService } from '../mission.service';
 import { Mission } from '../mission.model';
 import { StatusBadge } from '../../shared/status-badge/status-badge';
+import { tagColorClass } from '../../shared/tag-color';
+import { relativeDate } from '../../shared/relative-date';
+import { initials } from '../../shared/initials';
 
 @Component({
   selector: 'app-mission-list',
@@ -17,6 +20,17 @@ export class MissionList implements OnInit {
   protected readonly loading = signal(true);
   protected readonly closingId = signal<string | null>(null);
   protected readonly errorMessage = signal<string | null>(null);
+
+  protected readonly openCount = computed(() => this.missions().filter((m) => m.status === 'OPEN').length);
+  protected readonly averageRate = computed(() => {
+    const missions = this.missions();
+    if (missions.length === 0) return 0;
+    return Math.round(missions.reduce((sum, m) => sum + m.dailyRateAmount, 0) / missions.length);
+  });
+
+  protected readonly tagColorClass = tagColorClass;
+  protected readonly relativeDate = relativeDate;
+  protected readonly initials = initials;
 
   ngOnInit(): void {
     this.loadMissions();
