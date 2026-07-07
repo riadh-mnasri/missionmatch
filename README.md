@@ -53,7 +53,7 @@ MissionMatch has five bounded contexts:
 |---|---|---|---|---|
 | **Sourcing** | `Mission` | Mission lifecycle: created, open, closed | `MissionPublished`, `MissionClosed` | - |
 | **FreelancerProfile** | `Profile` | Skills, expected daily rate | `ProfileUpdated` | - |
-| **Matching** | `MatchResult` | Scoring algorithm, match history | `MatchComputed` | `MissionPublished`, `ProfileUpdated` |
+| **Matching** | `MatchResult` | Scoring algorithm, match history | `MatchComputed` | `MissionPublished`, `MissionClosed`, `ProfileUpdated` |
 | **ApplicationTracking** | `Candidature` | Pipeline status (kanban) | `CandidatureStatusChanged` | `MatchComputed` |
 | **Notification** | *(no aggregate - a "leaf" context)* | Email/Slack delivery | - | `MatchComputed`, `CandidatureStatusChanged` |
 
@@ -145,7 +145,7 @@ Contexts communicate exclusively through **domain events** published to Kafka, u
 | Topic | Producer | Consumers | Payload (essentials) |
 |---|---|---|---|
 | `mission-published` | Sourcing | Matching | missionId, requiredSkills, dailyRate, startDate |
-| `mission-closed` | Sourcing | *(none yet - known gap, see Roadmap)* | missionId |
+| `mission-closed` | Sourcing | Matching | missionId |
 | `profile-updated` | FreelancerProfile | Matching | freelancerId, skills, expectedDailyRate |
 | `match-computed` | Matching | ApplicationTracking, Notification | missionId, freelancerId, score |
 | `candidature-status-changed` | ApplicationTracking | Notification | candidatureId, previousStatus, newStatus |
@@ -157,9 +157,10 @@ Why events instead of direct REST calls between contexts? Two reasons this proje
 
 The tradeoff, and the reason this is worth learning deliberately rather than defaulting to REST everywhere: eventual consistency. A freelancer might see a mission in Sourcing for a few hundred milliseconds before a match appears - the UI must be built to tolerate that, not assume synchronous consistency.
 
-Two consequences of choreography and at-least-once delivery that this project ran into for real (not hypothetically) while building it:
+Three consequences of choreography and at-least-once delivery that this project ran into for real (not hypothetically) while building it:
 
-- **Matching doesn't yet consume `MissionClosed`.** A mission closed in Sourcing stays "open" in Matching's own read model until that gap is closed, so it can still surface as a fresh match. This is an intentional, tracked gap (see Roadmap), not an oversight - it exists to make the point that choreography means every context's view of the world can drift from the source of truth until it explicitly subscribes to the events that keep it current.
+- **Every context's view of the world can silently drift from the source of truth** if it doesn't subscribe to the events that keep it current. Matching originally only consumed `MissionPublished` and `ProfileUpdated` - a mission closed in Sourcing stayed "open" in Matching's own read model and could still surface as a fresh match. Fixed by also consuming `MissionClosed`.
+- **Different topics have no ordering guarantee relative to each other, even when one event logically depends on another.** Fixing the gap above by naively consuming `MissionClosed` wasn't enough on its own: `mission-published` and `mission-closed` are different topics, so `MissionClosed` can be consumed *before* `MissionPublished` has created the snapshot it's supposed to close, since each topic-partition's consumer becomes ready independently. The fix isn't "wait a bit" - it's a small `closed_mission_markers` table Matching writes to unconditionally on `MissionClosed`, regardless of whether a snapshot exists yet; `MissionPublished`'s handler checks it before deciding whether the mission it's about to create a snapshot for should start out open or already closed. Correct regardless of which event arrives first.
 - **Kafka's at-least-once delivery means consumers must be idempotent.** Reprocessing the same event (a consumer rebalance is enough to trigger it) must not corrupt state. `match_results` has a unique constraint on `(mission_id, freelancer_id)`, and the repository adapter treats a constraint violation as "someone else already recorded this" rather than an error - discovered by running the real system with real Kafka, not by reasoning about it in the abstract.
 
 ---
@@ -399,7 +400,8 @@ Secrets (DB credentials, Kafka auth) live in AWS Secrets Manager and are injecte
 - [x] Wire `freelancer-profile` end to end and publish real `ProfileUpdated` events
 - [x] Angular dashboard: mission list + publish form, match lookup by freelancer id
 - [x] Angular: profile page (skills + expected daily rate, backed by a per-browser local identity since there's no auth yet)
-- [ ] Have Matching consume `MissionClosed` so its read model doesn't drift from Sourcing's
+- [x] Have Matching consume `MissionClosed` so its read model doesn't drift from Sourcing's
+- [ ] Wire `application-tracking` end to end (candidature pipeline, consumes `MatchComputed`)
 - [ ] Angular: application pipeline kanban, once `application-tracking` exists
 - [ ] Terraform `dev` environment, deployed end-to-end
 - [ ] Optional: introduce Cucumber for living-documentation acceptance tests
