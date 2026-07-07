@@ -173,7 +173,7 @@ Three consequences of choreography and at-least-once delivery that this project 
 | Backend framework | Spring Boot | Dependency injection wires adapters to ports without the domain knowing |
 | Messaging | Apache Kafka (Amazon MSK Serverless in AWS) | Durable, replayable event log - fits choreography naturally |
 | Persistence | PostgreSQL (via Spring Data JPA) | One instance, one schema per bounded context |
-| Frontend | Angular (standalone components, signals) | Missions, Profile and Matches pages today; pipeline kanban once `application-tracking` exists |
+| Frontend | Angular (standalone components, signals) | Missions, Profile and Matches pages today; `application-tracking`'s API exists but has no UI yet |
 | Unit/integration testing | JUnit 5, Mockito, AssertJ | See [Testing strategy](#testing-strategy) |
 | Integration testing infra | Testcontainers (Postgres, Kafka) | Tests run against real engines, not mocks, without needing shared infra |
 | Infrastructure as Code | Terraform | AWS provisioning, versioned and reviewable like code |
@@ -190,7 +190,7 @@ missionmatch/
 │   ├── sourcing/                       # fully wired: domain, application, infrastructure
 │   ├── freelancer-profile/             # fully wired: domain, application, infrastructure
 │   ├── matching/                       # fully wired: domain, application, infrastructure
-│   ├── application-tracking/           # empty module skeleton, not implemented yet
+│   ├── application-tracking/           # fully wired: domain, application, infrastructure
 │   ├── notification/                   # empty module skeleton, not implemented yet
 │   └── bootstrap/              # the single deployable Spring Boot app wiring every module together
 ├── frontend/
@@ -326,6 +326,8 @@ Each context exposes its own REST resource under an `/api` prefix; there is no A
 | `GET` | `/api/candidatures?freelancerId=` | ApplicationTracking | List pipeline entries |
 | `PATCH` | `/api/candidatures/{id}/status` | ApplicationTracking | Move a candidature to another pipeline stage |
 
+Every controller throws plain domain exceptions (`IllegalArgumentException`/`IllegalStateException` for invalid input or a broken invariant, `NoSuchElementException` for an unknown id) and never touches HTTP status codes itself. A single `@RestControllerAdvice` in `bootstrap` (the composition root, the only place that knows about every controller) maps those to `400`/`404` with a small `{"message": "..."}` body, application-wide - one cross-cutting concern, one place, instead of duplicated try/catch in every context's web adapter.
+
 ---
 
 ## Running the project locally
@@ -404,8 +406,9 @@ Secrets (DB credentials, Kafka auth) live in AWS Secrets Manager and are injecte
 - [x] Angular dashboard: mission list + publish form, match lookup by freelancer id
 - [x] Angular: profile page (skills + expected daily rate, backed by a per-browser local identity since there's no auth yet)
 - [x] Have Matching consume `MissionClosed` so its read model doesn't drift from Sourcing's
-- [ ] Wire `application-tracking` end to end (candidature pipeline, consumes `MatchComputed`)
-- [ ] Angular: application pipeline kanban, once `application-tracking` exists
+- [x] Wire `application-tracking` end to end (candidature pipeline, consumes `MatchComputed`)
+- [ ] Angular: application pipeline kanban for the candidature statuses `application-tracking` already tracks
+- [ ] Wire `notification` (the last empty context) so `candidature-status-changed` has a consumer
 - [ ] Terraform `dev` environment, deployed end-to-end
 - [ ] Optional: introduce Cucumber for living-documentation acceptance tests
 - [ ] Optional: extract one context (e.g. Notification) into its own microservice, as a worked example of the monolith-to-microservice split
