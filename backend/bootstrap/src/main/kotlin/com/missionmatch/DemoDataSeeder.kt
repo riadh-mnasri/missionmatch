@@ -1,8 +1,8 @@
 package com.missionmatch
 
-import com.missionmatch.matching.application.port.input.HandleProfileUpdatedUseCase
-import com.missionmatch.matching.application.port.input.ProfileUpdatedCommand
-import com.missionmatch.matching.domain.FreelancerId
+import com.missionmatch.freelancerprofile.application.port.input.UpdateProfileCommand
+import com.missionmatch.freelancerprofile.application.port.input.UpdateProfileUseCase
+import com.missionmatch.freelancerprofile.domain.FreelancerId
 import com.missionmatch.sourcing.application.port.input.CloseMissionUseCase
 import com.missionmatch.sourcing.application.port.input.PublishMissionCommand
 import com.missionmatch.sourcing.application.port.input.PublishMissionUseCase
@@ -19,7 +19,7 @@ import java.util.UUID
 class DemoDataSeeder(
     private val publishMissionUseCase: PublishMissionUseCase,
     private val closeMissionUseCase: CloseMissionUseCase,
-    private val handleProfileUpdatedUseCase: HandleProfileUpdatedUseCase,
+    private val updateProfileUseCase: UpdateProfileUseCase,
 ) : CommandLineRunner {
 
     override fun run(vararg args: String?) {
@@ -30,14 +30,18 @@ class DemoDataSeeder(
         // seed a profile, since matches are only computed against missions it already knows.
         Thread.sleep(2000)
 
-        handleProfileUpdatedUseCase.handle(
-            ProfileUpdatedCommand(
+        updateProfileUseCase.update(
+            UpdateProfileCommand(
                 freelancerId = FreelancerId(DEMO_FREELANCER_ID),
                 skills = setOf("kotlin", "spring boot", "spring", "kafka", "java", "rest"),
                 expectedDailyRateAmount = BigDecimal.valueOf(600),
                 expectedDailyRateCurrency = "EUR",
             ),
         )
+
+        // Profile updates are consumed asynchronously by Matching too; give it time to compute
+        // and persist matches before we report the seeder as done.
+        Thread.sleep(1500)
 
         LOGGER.info("Demo data seeded. Look up matches for freelancer id {}", DEMO_FREELANCER_ID)
     }

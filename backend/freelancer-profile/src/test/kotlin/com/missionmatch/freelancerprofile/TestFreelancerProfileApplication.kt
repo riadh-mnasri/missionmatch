@@ -1,0 +1,6 @@
+package com.missionmatch.freelancerprofile
+
+import org.springframework.boot.autoconfigure.SpringBootApplication
+
+@SpringBootApplication
+class TestFreelancerProfileApplication
