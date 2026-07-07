@@ -13,7 +13,7 @@ Beyond its business purpose, this project exists as a **learning vehicle**. It i
 | Event-driven architecture | Kafka topics between bounded contexts |
 | Infrastructure as Code | Terraform modules for AWS |
 
-If you are reading this to learn the practices rather than to use the app, read the [Glossary](#glossary) first - it defines every term used below in plain language.
+If you are reading this to learn the practices rather than to use the app, read the [Glossary](#glossary) first - it defines every term used below in plain language. For a much deeper, fully pedagogical walkthrough of every concept with real code excerpts (available in English and French), see **[docs/en/ARCHITECTURE.md](docs/en/ARCHITECTURE.md)** / **[docs/fr/ARCHITECTURE.md](docs/fr/ARCHITECTURE.md)**.
 
 ---
 
@@ -200,6 +200,9 @@ missionmatch/
 │       ├── matches/             # look up matches by freelancer id
 │       └── shared/              # sidebar, chip-input, status-badge, tag colors, ...
 ├── docker-compose.yml           # Postgres + Kafka for local development
+├── docs/
+│   ├── en/ARCHITECTURE.md       # full pedagogical guide, English
+│   └── fr/ARCHITECTURE.md       # full pedagogical guide, French
 └── infra/terraform/             # not implemented yet, see Roadmap
     ├── modules/{network,ecs-service,rds,msk,frontend-hosting,observability}/
     ├── environments/{dev,prod}/
