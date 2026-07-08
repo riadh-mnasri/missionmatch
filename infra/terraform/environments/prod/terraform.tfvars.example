@@ -1,0 +1,12 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored - never commit real values.
+
+aws_region = "eu-west-1"
+
+container_image = "public.ecr.aws/docker/library/hello-world:latest"
+
+# alert_email = "you@example.com"
+
+# domain_name                   = "app.missionmatch.dev"
+# hosted_zone_id                = "Z0123456789ABCDEFGHIJ"
+# acm_certificate_arn_regional  = "arn:aws:acm:eu-west-1:111122223333:certificate/..."
+# acm_certificate_arn_us_east_1 = "arn:aws:acm:us-east-1:111122223333:certificate/..."

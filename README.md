@@ -205,10 +205,10 @@ missionmatch/
 ├── docs/
 │   ├── en/ARCHITECTURE.md       # full pedagogical guide, English
 │   └── fr/ARCHITECTURE.md       # full pedagogical guide, French
-└── infra/terraform/             # not implemented yet, see Roadmap
+└── infra/terraform/             # written and validated, not yet applied - see infra/terraform/README.md
     ├── modules/{network,ecs-service,rds,msk,frontend-hosting,observability}/
-    ├── environments/{dev,prod}/
-    └── backend.tf              # remote state: S3 + DynamoDB lock
+    ├── environments/{dev,prod}/     # backend.tf (partial S3 config) + backend.hcl per environment
+    └── bootstrap/                   # one-time: creates the S3 state bucket + DynamoDB lock table
 ```
 
 `shared-kernel` is intentionally tiny. In DDD, a **shared kernel** is a piece of model that multiple contexts agree to share - it should stay small and stable, because every context depending on it now has to agree before it changes. Here it only holds truly universal, stable concepts (a `Money` value object, an event envelope with correlation IDs) - never a `Mission` or a `Profile`.
@@ -380,12 +380,15 @@ infra/terraform/
 ├── environments/
 │   ├── dev/            # composes the modules for a cheap, always-on dev stack
 │   └── prod/           # same modules, sized/hardened differently
-└── backend.tf          # remote state in S3, lock in DynamoDB
+├── bootstrap/          # one-time: creates the S3 state bucket + DynamoDB lock table
+└── README.md           # how to actually run any of this
 ```
 
-State is remote (S3 + DynamoDB lock) from day one, even for a solo project - it's the practice that matters, and it removes "works on my machine" from infrastructure changes. CI runs `terraform plan` on every pull request and `terraform apply` on merge to `main` (with manual approval before `prod` is introduced).
+State is remote (S3 + DynamoDB lock) from day one, even for a solo project - it's the practice that matters, and it removes "works on my machine" from infrastructure changes. Each environment's `backend.tf` is a partial config; the real bucket/key/region live in that environment's `backend.hcl`, applied with `terraform init -backend-config=backend.hcl`. The plan is for CI to run `terraform plan` on every pull request and `terraform apply` on merge to `main` (with manual approval before `prod` is introduced) - not built yet, see Roadmap.
 
 Secrets (DB credentials, Kafka auth) live in AWS Secrets Manager and are injected into the ECS task at runtime - never committed, never baked into the container image.
+
+All six modules and both environments are written and pass `terraform validate`, but nothing has been `apply`'d - see [infra/terraform/README.md](infra/terraform/README.md) for the deploy flow and the short list of what it doesn't cover yet (CI/CD, a real domain, and MSK IAM auth exercised against a live cluster rather than just code review).
 
 ---
 
@@ -412,7 +415,9 @@ Secrets (DB credentials, Kafka auth) live in AWS Secrets Manager and are injecte
 - [x] Wire `notification` (logs instead of real email/Slack, but consumes both `MatchComputed` and `CandidatureStatusChanged` for real) - all five bounded contexts are now fully implemented
 - [x] Angular: application pipeline kanban for the candidature statuses `application-tracking` already tracks
 - [ ] Swap `LoggingNotificationSender` for a real email/Slack adapter behind the same `NotificationSender` port
-- [ ] Terraform `dev` environment, deployed end-to-end
+- [x] Terraform: all six modules and both environments written, `terraform validate`-clean (see [infra/terraform/README.md](infra/terraform/README.md))
+- [ ] Terraform `dev` environment, actually `apply`'d to a real AWS account
+- [ ] CI/CD: build the Docker image, push to ECR, run `terraform plan`/`apply`
 - [ ] Optional: introduce Cucumber for living-documentation acceptance tests
 - [ ] Optional: extract one context (e.g. Notification) into its own microservice, as a worked example of the monolith-to-microservice split
 

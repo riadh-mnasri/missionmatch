@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored - never commit real values.
+
+aws_region = "eu-west-1"
+
+# Leave unset (or point at any public placeholder image) for the very first apply, since the
+# ECR repository this builds doesn't exist yet to have been pushed to. Once it does:
+#   container_image = "<account-id>.dkr.ecr.eu-west-1.amazonaws.com/missionmatch-dev:latest"
+container_image = "public.ecr.aws/docker/library/hello-world:latest"
+
+# alert_email = "you@example.com"

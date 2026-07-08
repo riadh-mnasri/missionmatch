@@ -1,0 +1,22 @@
+# Activated in ECS via SPRING_PROFILES_ACTIVE=aws (see infra/terraform/modules/ecs-service).
+# Connection details (host, brokers, credentials) come entirely from environment variables
+# and Secrets Manager - nothing environment-specific is hardcoded here, only the auth
+# mechanism MSK Serverless requires.
+
+spring:
+  kafka:
+    security:
+      protocol: SASL_SSL
+    properties:
+      sasl.mechanism: AWS_MSK_IAM
+      sasl.jaas.config: software.amazon.msk.auth.iam.IAMLoginModule required;
+      sasl.client.callback.handler.class: software.amazon.msk.auth.iam.IAMClientCallbackHandler
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
