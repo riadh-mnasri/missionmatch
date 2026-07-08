@@ -17,7 +17,8 @@ Si vous connaissez déjà parfaitement le DDD, l'architecture hexagonale et les 
 7. [Test-Driven Development & Behavior-Driven Development](#7-test-driven-development--behavior-driven-development)
 8. [Visite guidée de la structure du code](#8-visite-guidée-de-la-structure-du-code)
 9. [Le frontend, concept par concept](#9-le-frontend-concept-par-concept)
-10. [Glossaire](#10-glossaire)
+10. [Infrastructure as code : de six modules à un système qui tourne](#10-infrastructure-as-code--de-six-modules-à-un-système-qui-tourne)
+11. [Glossaire](#11-glossaire)
 
 ---
 
@@ -495,11 +496,13 @@ spring.json.type.mapping: >
 
 Lisez ça attentivement : **l'alias `mission-published` correspond à une classe Kotlin *différente* de chaque côté.** Le producteur associe l'alias à *son propre* event de domaine ; le consumer associe le *même alias* à son propre DTO anti-corruption. Kafka transporte l'alias `mission-published` dans un en-tête de message (`__TypeId__`), et chaque côté résout indépendamment cet alias vers le type local qui lui convient. Aucun des deux côtés n'a besoin de savoir que la classe de l'autre existe seulement. C'est la couche anti-corruption, rendue vraiment fonctionnelle sur un protocole de communication, pas seulement sur un diagramme.
 
+Cette propriété globale a exactement une limite : elle ne peut associer un alias qu'à *une seule* classe par côté. Ça fonctionne tant qu'un topic n'a qu'un seul contexte consommateur - ça cesse de fonctionner dès que deux contextes ont chacun besoin de leur propre DTO pour le même topic. La section 6.7 détaille exactement ce cas, et la fabrique de conteneurs par contexte qu'il faut pour s'en sortir.
+
 ---
 
 ## 6. Récits de guerre : de vrais bugs distribués rencontrés sur ce projet
 
-Cette section diffère du reste du guide : ce n'est pas la description d'un patron appliqué correctement dès le départ. Ce sont de vrais bugs, trouvés en faisant *réellement tourner* le système complet - vrai Kafka, vrai Postgres, vrais consumers concurrents - puis corrigés. Ils sont inclus car lire sur la "cohérence à terme" et la "livraison au moins une fois" dans l'abstrait ne prépare pas à ce que ça donne réellement quand ça mord. Les trois sont documentés plus en détail dans l'historique git du projet et dans le [README](../../README.md#event-driven-communication).
+Cette section diffère du reste du guide : ce n'est pas la description d'un patron appliqué correctement dès le départ. Ce sont de vrais bugs, trouvés en faisant *réellement tourner* le système complet - vrai Kafka, vrai Postgres, vrais consumers concurrents, vrai démarrage du contexte Spring - puis corrigés. Ils sont inclus car lire sur la "cohérence à terme" et la "livraison au moins une fois" dans l'abstrait ne prépare pas à ce que ça donne réellement quand ça mord. Chacun est documenté plus en détail dans l'historique git du projet et dans le [README](../../README.md#event-driven-communication).
 
 ### 6.1 Les en-têtes de type, ou la pierre de Rosette manquante
 
@@ -578,6 +581,84 @@ override fun handle(command: MissionPublishedCommand) {
 ```
 
 C'est correct quel que soit l'event qui arrive en premier, car aucun des deux handlers ne suppose quoi que ce soit sur l'ordre - chacun vérifie simplement le fait durable et agit en conséquence. La leçon, énoncée plus généralement : **quand deux events sont liés causalement mais voyagent sur des topics différents, ne corrigez pas le symptôme en ajustant le timing (un délai, une pause) ; corrigez le modèle pour que la justesse ne dépende plus du tout de l'ordre d'arrivée.**
+
+### 6.6 Une erreur de validation qui revenait en 500
+
+**Symptôme :** envoyer volontairement une transition de candidature illégale (par exemple `TO_APPLY` directement vers `ACCEPTED`) renvoyait `500 Internal Server Error` sans corps exploitable, au lieu d'un `400` expliquant ce qui n'allait pas.
+
+**Cause :** `Candidature.moveTo()` lève une `IllegalArgumentException` quand la transition demandée n'est pas dans `ALLOWED_TRANSITIONS` - c'est le comportement correct du domaine. Mais aucun contrôleur nulle part ne traduisait cette exception en statut HTTP. Le comportement par défaut de Spring Boot pour toute exception non attrapée qui atteint un contrôleur est un `500` générique, techniquement vrai (quelque chose s'est mal passé) mais inutile pour le client : un `500` dit "on a cassé quelque chose," un `400` dit "vous avez envoyé quelque chose d'invalide," et les deux appellent des réactions complètement différentes de la part de qui appelle l'API. L'endpoint `close()` de Sourcing avait exactement la même faille silencieuse - elle n'avait simplement jamais été testée avec une requête invalide.
+
+**Correctif :** un seul `@RestControllerAdvice` à la racine de composition (`bootstrap`, pas un contexte particulier) qui associe `IllegalArgumentException`/`IllegalStateException` à `400` et `NoSuchElementException` à `404` :
+
+```kotlin
+@RestControllerAdvice
+class ApiExceptionHandler {
+
+    @ExceptionHandler(IllegalArgumentException::class, IllegalStateException::class)
+    fun handleInvalidRequest(exception: RuntimeException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.badRequest().body(ErrorResponse(exception.message ?: "Invalid request"))
+
+    @ExceptionHandler(NoSuchElementException::class)
+    fun handleNotFound(exception: NoSuchElementException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResponse(exception.message ?: "Not found"))
+}
+```
+
+C'est un souci web transversal, pas un souci de domaine - il n'a sa place qu'à un seul endroit, celui qui assemble chaque contexte en endpoints HTTP. Le corriger ici a réglé à la fois le nouvel endpoint d'ApplicationTracking et celui, préexistant, de Sourcing, sans aucun changement dans le code de l'un ou l'autre contexte.
+
+### 6.7 Un topic, deux consumers, un seul mapping de type - insuffisant
+
+**Symptôme :** dès que `notification` a eu besoin, lui aussi, de consommer `match-computed` (la carte des contextes de la section 3.3 montre bien ApplicationTracking et Notification en dépendre tous les deux), il est devenu évident que la configuration existante ne pouvait pas servir les deux à la fois - repéré en raisonnant sur la config avant même de faire tourner l'appli, pas par un plantage.
+
+**Cause :** `spring.json.type.mapping` est une seule propriété, globale au côté consumer de la config Kafka partagée (section 5.4). Elle associe l'alias `match-computed` à exactement une classe. Mais ApplicationTracking et Notification ont chacun besoin de *leur propre* DTO anti-corruption pour le même event (la règle de la section 5.3 - ne jamais partager un DTO entre contextes) - deux classes cibles différentes pour le même alias, ce qu'une seule propriété globale ne peut tout simplement pas exprimer.
+
+**Correctif :** Kafka n'exige pas que tous les consumers d'un topic désérialisent de la même façon - la désérialisation est une préoccupation du client, propre à chaque groupe de consumers, pas une propriété du topic. Chaque contexte qui a besoin de son propre DTO pour `match-computed` reçoit donc sa propre `ConcurrentKafkaListenerContainerFactory`, construite manuellement et liée à son propre `JsonDeserializer`, référencée explicitement depuis son `@KafkaListener` :
+
+```kotlin
+@Bean
+fun applicationTrackingKafkaListenerContainerFactory():
+    ConcurrentKafkaListenerContainerFactory<String, MatchComputedIntegrationEvent> {
+    val valueDeserializer = JsonDeserializer(MatchComputedIntegrationEvent::class.java, false).apply {
+        addTrustedPackages("com.missionmatch.*")
+    }
+    val consumerFactory = DefaultKafkaConsumerFactory(
+        mapOf(
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG to bootstrapServers,
+            ConsumerConfig.AUTO_OFFSET_RESET_CONFIG to "earliest",
+        ),
+        StringDeserializer(), valueDeserializer,
+    )
+    return ConcurrentKafkaListenerContainerFactory<String, MatchComputedIntegrationEvent>().apply {
+        this.consumerFactory = consumerFactory
+    }
+}
+```
+
+```kotlin
+@KafkaListener(topics = ["match-computed"], groupId = "application-tracking", containerFactory = "applicationTrackingKafkaListenerContainerFactory")
+```
+
+`notification` déclare l'image miroir, liée à sa propre classe `MatchComputedIntegrationEvent`. Le `spring.json.type.mapping` global d'`application.yml` omet désormais délibérément `match-computed`, avec un commentaire expliquant pourquoi - les deux fabriques dédiées le gèrent à sa place.
+
+### 6.8 Deux classes, même nom, un seul contexte Spring
+
+**Symptôme :** `bootRun` échouait au démarrage avec `ConflictingBeanDefinitionException: Annotation-specified bean name 'matchComputedConsumer' ... conflicts with existing bean definition`. Après correction et redémarrage, la *même* erreur revenait, cette fois pour `matchComputedConsumerConfiguration`.
+
+**Cause :** ApplicationTracking et Notification déclaraient chacun leur propre `MatchComputedConsumer` (puis, une fois le correctif de la section 6.7 écrit, leur propre `MatchComputedConsumerConfiguration`) - dans des packages différents, donc Kotlin compile les deux sans broncher. Mais le nommage par défaut des beans du component-scan de Spring utilise le nom de classe *simple*, non qualifié, pas le nom pleinement qualifié. Dans un monolithe modulaire, les classes `@Component`/`@Configuration` de chaque module s'enregistrent dans le *même* `ApplicationContext` - donc deux classes qui partagent par hasard un nom simple entrent en collision dans ce registre de beans partagé, même si rien dans le code lui-même n'est incorrect.
+
+**Correctif :** des noms de bean explicites partout où un nom simple pouvait plausiblement entrer en collision entre modules :
+
+```kotlin
+@Component("applicationTrackingMatchComputedConsumer")
+class MatchComputedConsumer(...)
+```
+
+```kotlin
+@Component("notificationMatchComputedConsumer")
+class MatchComputedConsumer(...)
+```
+
+C'est une conséquence réelle et structurelle du choix d'un monolithe modulaire plutôt que des microservices séparés (section 8.3) : les frontières entre modules empêchent le compilateur de laisser un contexte importer les classes d'un autre, mais elles n'empêchent pas les noms de classe simples de deux contextes d'entrer en collision dans le seul registre d'exécution qu'ils partagent. Découper l'un ou l'autre contexte en microservice à part rendrait cette catégorie de bug structurellement impossible - chaque processus aurait son propre `ApplicationContext`, séparé.
 
 ---
 
@@ -763,9 +844,66 @@ Le frontend n'est pas juste une interface posée sur les concepts backend ci-des
 
 **Un proxy, pas du CORS, pour le développement local.** `frontend/proxy.conf.json` redirige toute requête vers `/api/*` depuis le serveur de développement Angular (port 4310) vers le backend (port 8181). Ça fait que le navigateur voit tout comme provenant de la même origine pendant le développement, contournant complètement le CORS pour ce flux de travail (le backend a aussi une politique CORS explicite configurée, pour le cas où on l'atteindrait directement sans passer par le proxy).
 
+**Des règles côté client qui reflètent, sans jamais remplacer, celles du serveur.** Le tableau kanban `/candidatures` (`CandidatureBoard`) n'affiche que les boutons de transition que `Candidature.moveTo()` autoriserait réellement - une carte `TO_APPLY` propose "Applied," jamais "Accepted." Cette liste est dupliquée côté frontend, dans une simple map `ALLOWED_TRANSITIONS` à côté du modèle `Candidature`, uniquement comme décision d'interface sur quels boutons afficher :
+
+```typescript
+export const ALLOWED_TRANSITIONS: Record<CandidatureStatus, CandidatureStatus[]> = {
+  TO_APPLY: ['APPLIED'],
+  APPLIED: ['INTERVIEW', 'REJECTED'],
+  INTERVIEW: ['ACCEPTED', 'REJECTED'],
+  REJECTED: [],
+  ACCEPTED: [],
+};
+```
+
+Cette duplication est délibérée et sans danger *parce que* le backend ne lui fait jamais confiance : chaque `PATCH /api/candidatures/{id}/status` revalide la transition contre la vraie règle de l'agrégat dans `Candidature.moveTo()`, et le gestionnaire d'exceptions de la section 6.6 transforme un rejet en un `400` propre que le tableau peut exploiter. Si les deux listes venaient à diverger, l'interface proposerait juste un bouton que le serveur refuserait à juste titre - une moins bonne expérience, jamais un bug de justesse. La règle qui compte réellement ne vit qu'à un seul endroit : l'agrégat.
+
 ---
 
-## 10. Glossaire
+## 10. Infrastructure as code : de six modules à un système qui tourne
+
+Tout ce qui précède cette section tourne de la même façon, que ce soit sur un ordinateur portable ou sur AWS - c'est exactement ce que procure l'architecture hexagonale. Cette section porte sur ce qui, lui, change : comment l'unique processus Spring Boot déployable, l'unique instance Postgres et l'unique cluster Kafka décrits tout au long de ce guide se provisionnent réellement sur une vraie infrastructure. Au moment où ces lignes sont écrites, `infra/terraform/` est écrit et passe `terraform validate`, mais rien n'a encore été `apply`. Les ressources AWS décrites ici n'existent pas. Cette distinction compte et est maintenue honnête délibérément, à la fois dans ce guide et dans la [roadmap du README](../../README.md#roadmap) : lire du Terraform qui décrit une infrastructure réelle est un exercice différent, plus utile, que lire un diagramme, mais ce n'est toujours pas la même chose que l'avoir vu tourner.
+
+### 10.1 Six modules, une préoccupation chacun
+
+`infra/terraform/modules/` reflète le tableau du README : `network` (VPC, sous-réseaux, NAT), `rds` (l'unique instance Postgres que tous les contextes partagent - le modèle de la section 3.8, rien de partagé sauf l'infrastructure), `msk` (Kafka managé, serverless donc aucune capacité de broker à planifier), `ecs-service` (le service Fargate qui fait tourner l'unique jar déployable), `frontend-hosting` (S3 + CloudFront pour l'app Angular buildée), et `observability` (les alarmes CloudWatch). `environments/dev` et `environments/prod` composent les six mêmes modules avec des entrées différentes - des instances plus petites et une seule passerelle NAT pour dev, du RDS Multi-AZ et une NAT par zone de disponibilité pour prod - ce qui est la même idée que le découpage ports-et-adapters de ce code, un cran au-dessus : les modules sont l'interface stable, les environnements sont ce qui varie.
+
+### 10.2 Un cycle de dépendances entre modules, évité en remontant une ressource d'un niveau
+
+`ecs-service` a besoin de l'endpoint de base de données de `rds` et des brokers de démarrage de `msk` en entrée, pour les câbler dans les variables d'environnement du conteneur. `rds` et `msk`, de leur côté, ont besoin de connaître l'id du security group des tâches ECS, pour n'autoriser le trafic entrant *que* depuis lui. Chaque côté a besoin de quelque chose que l'autre produit - un vrai cycle, et Terraform n'a aucun mécanisme pour qu'un module dépende d'un autre module qui dépend de lui en retour.
+
+Le correctif est le même type de mouvement utilisé partout dans ce code dès que deux choses ont besoin de se référencer mutuellement : introduire quelque chose en amont des deux qui ne dépend d'aucun des deux. Le `main.tf` de chaque environnement crée lui-même le security group des tâches ECS, directement, avant d'appeler le moindre module :
+
+```hcl
+resource "aws_security_group" "ecs_tasks" {
+  name_prefix = "${local.name_prefix}-ecs-"
+  vpc_id      = module.network.vpc_id
+}
+```
+
+`rds` et `msk` prennent son id en entrée, pour écrire leurs propres règles d'entrée contre lui. `ecs-service` le prend aussi en entrée - il ne crée pas le security group, il ne fait qu'y attacher une règle (`aws_vpc_security_group_ingress_rule`, "l'ALB peut atteindre le port du conteneur"), une règle qui référence un security group que le module a reçu, pas un qu'il possède. Aucune sortie ne dépend de la ressource qui les crée ; le cycle disparaît parce que l'élément partagé a été déplacé là où les deux côtés pouvaient le voir sans avoir besoin l'un de l'autre.
+
+### 10.3 Provisionner un dépôt d'images avant d'avoir quoi que ce soit à y mettre
+
+`ecs-service` crée son propre dépôt ECR (`aws_ecr_repository`), plutôt que de supposer qu'il en existe déjà un. Ça inverse l'ordre habituel des opérations : normalement on build et on push une image, *puis* on pointe l'infrastructure dessus. Ici, l'infrastructure qui finira par tirer l'image est aussi ce qui crée l'étagère sur laquelle elle repose.
+
+Ça fonctionne parce qu'une URL de dépôt ECR est entièrement déterministe - `{id-de-compte}.dkr.ecr.{région}.amazonaws.com/{nom-du-dépôt}` - calculable par quiconque connaît le compte, la région et le nom, sans avoir besoin que le dépôt existe déjà ni qu'une sortie Terraform ait déjà tourné. La conséquence pratique, explicitée dans `infra/terraform/README.md` : le tout premier `terraform apply` d'un nouvel environnement se fait avec un `container_image` factice (une image publique "hello world"), parce que la vraie image ne peut pas être buildée et poussée vers un dépôt qui n'existe pas encore. Une fois l'apply passé, `backend/Dockerfile` build la vraie image, elle est poussée vers le dépôt qui existe désormais, et un second `apply` remplace `container_image` par le vrai tag. Amorcer une infrastructure signifie parfois accepter un premier état délibérément faux pour atteindre un endroit où le bon devient possible.
+
+### 10.4 Une seule origine navigateur, deux backends
+
+CloudFront dans `frontend-hosting` est configuré avec deux origines, pas une seule : le bucket S3 qui héberge l'app Angular buildée (le comportement par défaut), et l'ALB qui expose le service ECS, mis en correspondance uniquement pour le motif de chemin `/api/*`. C'est exactement le même raisonnement déjà à l'œuvre en développement local, où `frontend/proxy.conf.json` redirige `/api/*` vers le backend pour que le serveur de dev et l'API paraissent de même origine au navigateur (le paragraphe sur le proxy, section 9). Le comportement `/api/*` de CloudFront, c'est cette même idée, qui tourne en production plutôt que sur un ordinateur portable : les routes propres à Angular côté client (`/missions`, `/candidatures`, ...) et les ressources REST du backend n'entrent jamais en collision, parce que du point de vue du navigateur il n'y a jamais qu'une seule origine, et la répartition se fait de façon invisible, un cran plus bas.
+
+### 10.5 Un mot de passe que l'application ne voit jamais en clair
+
+`rds` génère son mot de passe maître avec `random_password` et l'écrit immédiatement dans un secret Secrets Manager - ce n'est jamais une variable Terraform, jamais un fichier `.tfvars`, jamais loggé dans un `terraform plan`. Le task definition d'`ecs-service` référence ce secret par ARN, en utilisant la capacité d'ECS à extraire une *clé précise* d'un secret JSON au démarrage du conteneur (`"${secret_arn}:username::"`, `"${secret_arn}:password::"`), si bien que le conteneur qui tourne reçoit de vraies variables d'environnement (`SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`) sans que cette valeur soit jamais passée par la forme en clair du state Terraform, ni par les mains de qui que ce soit. Faire tourner le mot de passe devient une opération Secrets Manager et un redémarrage du service ECS - pas un changement de code, pas un redéploiement de quoi que ce soit géré par Terraform.
+
+### 10.6 L'offre serverless de Kafka fait un choix à votre place
+
+MSK Serverless (le module `msk`) impose l'authentification client SASL/IAM - impossible d'opter pour un couple identifiant/mot de passe géré par le broker, contrairement à MSK auto-géré. C'est une vraie contrainte que l'application doit satisfaire, pas seulement l'infrastructure : `backend/bootstrap/build.gradle.kts` ajoute `software.amazon.msk:aws-msk-iam-auth`, et un profil Spring dédié `aws` (`application-aws.yml`) configure les propriétés du client Kafka dont l'authentification IAM a besoin (`sasl.mechanism: AWS_MSK_IAM`, un couple `IAMLoginModule`/`IAMClientCallbackHandler`) - inactif en local, où le Kafka de `docker-compose.yml` n'a besoin de rien de tout ça, et actif uniquement une fois que `SPRING_PROFILES_ACTIVE=aws` est positionné par `ecs-service`. Le *rôle* IAM de la tâche ECS (pas un identifiant stocké) est ce qui s'authentifie auprès de Kafka à l'exécution - `aws_iam_role_policy.task_kafka` accorde à ce rôle exactement `kafka-cluster:Connect`/`ReadData`/`WriteData` sur ce cluster, rien de plus large.
+
+---
+
+## 11. Glossaire
 
 - **Adapter conducteur** (*driving adapter*) - un adapter qui initie un appel vers la couche application. *Exemple : `MissionController` (REST), `MissionPublishedConsumer` (Kafka).*
 - **Adapter conduit** (*driven adapter*) - un adapter que la couche application appelle pour réaliser un port de sortie. *Exemple : `MissionRepositoryAdapter` (JPA), `KafkaMissionEventPublisher`.*
@@ -777,7 +915,9 @@ Le frontend n'est pas juste une interface posée sur les concepts backend ci-des
 - **Couche anti-corruption** (*anti-corruption layer*) - une frontière de traduction qui empêche le modèle interne d'un contexte borné de fuiter dans un autre. *Exemple : `MissionPublishedIntegrationEvent` dans `matching`, une copie locale du format d'échange qui ne dépend pas de la classe `MissionPublished` de Sourcing.*
 - **Entité** (*entity*) - un objet défini par son identité (un identifiant), pas par ses attributs actuels, dont l'état peut changer dans le temps. *Exemple : `Mission`.*
 - **Event de domaine** (*domain event*) - un fait qui s'est produit dans le domaine, nommé au passé, auquel d'autres parties du système peuvent réagir. *Exemple : `MissionPublished`.*
+- **IAM (rôle)** - une identité AWS endossée par une ressource (ici, une tâche ECS) plutôt qu'un identifiant stocké, à qui l'on accorde seulement les permissions dont elle a besoin. *Exemple : la permission `kafka-cluster:Connect` du rôle de la tâche ECS, limitée à exactement un cluster MSK, est ce qui s'authentifie auprès de Kafka plutôt qu'un couple identifiant/mot de passe.*
 - **Idempotence** - la propriété qu'exécuter la même opération (ou traiter le même event) plus d'une fois produit le même résultat que l'exécuter une seule fois, sans effet de bord supplémentaire. *Exemple : la contrainte d'unicité sur `match_results` qui transforme une insertion en doublon en un no-op sûr plutôt qu'en une ligne dupliquée.*
+- **Infrastructure as Code (IaC)** - décrire l'infrastructure (serveurs, réseaux, bases de données) comme de la configuration versionnée et relisable plutôt que par des clics manuels dans une console, pour que la provisionner soit reproductible et auditable de la même façon que du code. *Exemple : `infra/terraform/`.*
 - **Langage ubiquitaire** (*ubiquitous language*) - le vocabulaire partagé entre les développeurs et les experts métier à l'intérieur d'un contexte borné, utilisé littéralement dans le code - noms de classes, noms de méthodes - pas seulement dans des commentaires ou de la documentation.
 - **Monolithe modulaire** (*modular monolith*) - une application unique déployable, découpée en interne en modules strictement délimités (ici, un par contexte borné), communiquant uniquement par les mêmes types de frontières (events, ports) qu'un véritable découpage en microservices utiliserait.
 - **Noyau partagé** (*shared kernel*) - un petit morceau de modèle, explicitement accepté d'un commun accord, partagé entre plusieurs contextes bornés, gardé minimal car chaque contexte qui en dépend doit donner son accord avant qu'il change. *Exemple : `Money`, `SkillSet` dans `shared-kernel`.*

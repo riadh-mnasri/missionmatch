@@ -17,7 +17,8 @@ If you already know DDD, hexagonal architecture, and event-driven systems cold, 
 7. [Test-Driven Development & Behavior-Driven Development](#7-test-driven-development--behavior-driven-development)
 8. [A guided tour of the code structure](#8-a-guided-tour-of-the-code-structure)
 9. [The frontend, concept by concept](#9-the-frontend-concept-by-concept)
-10. [Glossary](#10-glossary)
+10. [Infrastructure as code: from six modules to a running system](#10-infrastructure-as-code-from-six-modules-to-a-running-system)
+11. [Glossary](#11-glossary)
 
 ---
 
@@ -495,11 +496,13 @@ spring.json.type.mapping: >
 
 Read this carefully: **the alias `mission-published` maps to a *different* Kotlin class on each side.** The producer maps it to *its own* domain event; the consumer maps the *same alias* to its own anti-corruption DTO. Kafka carries the alias `mission-published` in a message header (`__TypeId__`), and each side independently resolves that alias to whatever local type makes sense for it. Neither side needs to know the other's class even exists. This is the anti-corruption layer, made to actually work over a wire protocol, not just a diagram.
 
+This one global property has exactly one limit: it can only map an alias to *one* class per side. That's fine as long as each topic has a single consumer context - it stops being fine the moment two contexts both need their own DTO for the same topic. Section 6.7 walks through exactly that case, and the per-context container factory it takes to get past it.
+
 ---
 
 ## 6. War stories: real distributed-systems bugs this project hit
 
-This section is different from the rest of the guide: it's not a description of a pattern applied correctly from the start. These are bugs that were found by actually running the full system - real Kafka, real Postgres, real concurrent consumers - and fixed. They're included because reading about "eventual consistency" and "at-least-once delivery" in the abstract doesn't prepare you for what they actually look like when they bite. All three are documented in more detail in the project's git history and the [README](../../README.md#event-driven-communication).
+This section is different from the rest of the guide: it's not a description of a pattern applied correctly from the start. These are bugs that were found by actually running the full system - real Kafka, real Postgres, real concurrent consumers, real Spring context startup - and fixed. They're included because reading about "eventual consistency" and "at-least-once delivery" in the abstract doesn't prepare you for what they actually look like when they bite. Each is documented in more detail in the project's git history and the [README](../../README.md#event-driven-communication).
 
 ### 6.1 Type headers, or the missing Rosetta Stone
 
@@ -578,6 +581,84 @@ override fun handle(command: MissionPublishedCommand) {
 ```
 
 This is correct no matter which event arrives first, because neither handler assumes anything about ordering - each just checks the durable fact and acts accordingly. The lesson, stated generally: **when two events are causally related but travel on different topics, don't fix the symptom by tuning timing (a sleep, a delay); fix the model so correctness doesn't depend on arrival order at all.**
+
+### 6.6 A validation error that came back as a 500
+
+**Symptom:** sending an intentionally illegal candidature transition (e.g. `TO_APPLY` straight to `ACCEPTED`) returned `500 Internal Server Error` with no useful body, instead of a `400` explaining what was wrong.
+
+**Cause:** `Candidature.moveTo()` throws `IllegalArgumentException` when the requested transition isn't in `ALLOWED_TRANSITIONS` - correct domain behavior. But no controller anywhere translated that exception into an HTTP status. Spring Boot's default behavior for any uncaught exception reaching a controller is a generic `500`, which is technically true (something did go wrong) but useless to a client: a `500` says "we broke," a `400` says "you sent something invalid," and the two demand completely different responses from whoever's calling the API. Sourcing's `close()` endpoint had the exact same silent gap - it just hadn't been exercised with a bad request yet.
+
+**Fix:** one `@RestControllerAdvice` at the composition root (`bootstrap`, not any individual context) mapping `IllegalArgumentException`/`IllegalStateException` to `400` and `NoSuchElementException` to `404`:
+
+```kotlin
+@RestControllerAdvice
+class ApiExceptionHandler {
+
+    @ExceptionHandler(IllegalArgumentException::class, IllegalStateException::class)
+    fun handleInvalidRequest(exception: RuntimeException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.badRequest().body(ErrorResponse(exception.message ?: "Invalid request"))
+
+    @ExceptionHandler(NoSuchElementException::class)
+    fun handleNotFound(exception: NoSuchElementException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResponse(exception.message ?: "Not found"))
+}
+```
+
+This is a cross-cutting web concern, not a domain concern - it belongs exactly once, at the one place that assembles every context into HTTP endpoints. Fixing it here fixed both ApplicationTracking's new endpoint and Sourcing's pre-existing one, with zero changes to either context's own code.
+
+### 6.7 One topic, two consumers, one type mapping - not enough
+
+**Symptom:** as soon as `notification` also needed to consume `match-computed` (Section 3.3's context map shows both ApplicationTracking and Notification depending on it), it became clear the existing setup couldn't serve both - caught by reasoning about the config before ever running the app, not by a crash.
+
+**Cause:** `spring.json.type.mapping` is one property, global to the consumer side of the shared Kafka config (Section 5.4). It maps the alias `match-computed` to exactly one class. But ApplicationTracking and Notification each need their *own* anti-corruption DTO for the same event (Section 5.3's rule - never share a DTO across contexts) - two different target classes for the same alias, which one global property literally cannot express.
+
+**Fix:** Kafka doesn't require every consumer of a topic to deserialize it the same way - deserialization is a per-consumer-group client concern, not a topic-level property. So each context that needs its own DTO for `match-computed` gets its own `ConcurrentKafkaListenerContainerFactory`, built manually and bound to its own `JsonDeserializer`, referenced explicitly from its `@KafkaListener`:
+
+```kotlin
+@Bean
+fun applicationTrackingKafkaListenerContainerFactory():
+    ConcurrentKafkaListenerContainerFactory<String, MatchComputedIntegrationEvent> {
+    val valueDeserializer = JsonDeserializer(MatchComputedIntegrationEvent::class.java, false).apply {
+        addTrustedPackages("com.missionmatch.*")
+    }
+    val consumerFactory = DefaultKafkaConsumerFactory(
+        mapOf(
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG to bootstrapServers,
+            ConsumerConfig.AUTO_OFFSET_RESET_CONFIG to "earliest",
+        ),
+        StringDeserializer(), valueDeserializer,
+    )
+    return ConcurrentKafkaListenerContainerFactory<String, MatchComputedIntegrationEvent>().apply {
+        this.consumerFactory = consumerFactory
+    }
+}
+```
+
+```kotlin
+@KafkaListener(topics = ["match-computed"], groupId = "application-tracking", containerFactory = "applicationTrackingKafkaListenerContainerFactory")
+```
+
+`notification` defines the mirror image, bound to its own `MatchComputedIntegrationEvent` class. `application.yml`'s global `spring.json.type.mapping` now deliberately omits `match-computed` entirely, with a comment explaining why - the two dedicated factories handle it instead.
+
+### 6.8 Two classes, same name, one Spring context
+
+**Symptom:** `bootRun` failed at startup with `ConflictingBeanDefinitionException: Annotation-specified bean name 'matchComputedConsumer' ... conflicts with existing bean definition`. Fixing it and restarting hit the *same* error again, this time for `matchComputedConsumerConfiguration`.
+
+**Cause:** ApplicationTracking and Notification each declared their own `MatchComputedConsumer` (and, once Section 6.7's fix was written, their own `MatchComputedConsumerConfiguration`) - different packages, so Kotlin compiles both without complaint. But Spring's default component-scan bean naming uses the *simple*, unqualified class name, not the fully-qualified one. In a modular monolith, every module's `@Component`/`@Configuration` classes register into the *same* `ApplicationContext` - so two classes that happen to share a simple name collide in that one shared bean registry, even though nothing about the code itself is wrong.
+
+**Fix:** explicit bean names wherever a simple name could plausibly collide across modules:
+
+```kotlin
+@Component("applicationTrackingMatchComputedConsumer")
+class MatchComputedConsumer(...)
+```
+
+```kotlin
+@Component("notificationMatchComputedConsumer")
+class MatchComputedConsumer(...)
+```
+
+This is a real, structural consequence of choosing a modular monolith over separate microservices (Section 8.3): module boundaries stop the compiler from letting one context import another's classes, but they don't stop two contexts' simple class names from colliding in the one runtime registry they both share. Splitting either context into its own microservice later would make this class of bug structurally impossible - each process would have its own, separate `ApplicationContext`.
 
 ---
 
@@ -763,9 +844,66 @@ The frontend isn't just a UI on top of the backend concepts above - it applies i
 
 **A proxy, not CORS, for local development.** `frontend/proxy.conf.json` forwards any request to `/api/*` from the Angular dev server (port 4310) to the backend (port 8181). This makes the browser see everything as same-origin during development, sidestepping CORS entirely for the dev workflow (the backend also has an explicit CORS policy configured, for the case of hitting it directly without the proxy).
 
+**Client-side rules that mirror, but never replace, server-side ones.** The `/candidatures` kanban board (`CandidatureBoard`) only shows the transition buttons `Candidature.moveTo()` would actually allow - a `TO_APPLY` card offers "Applied," never "Accepted." That list is duplicated on the frontend, in a plain `ALLOWED_TRANSITIONS` map next to the `Candidature` model, purely as a UI decision about which buttons to render:
+
+```typescript
+export const ALLOWED_TRANSITIONS: Record<CandidatureStatus, CandidatureStatus[]> = {
+  TO_APPLY: ['APPLIED'],
+  APPLIED: ['INTERVIEW', 'REJECTED'],
+  INTERVIEW: ['ACCEPTED', 'REJECTED'],
+  REJECTED: [],
+  ACCEPTED: [],
+};
+```
+
+This duplication is deliberate and safe *because* the backend never trusts it: every `PATCH /api/candidatures/{id}/status` re-validates the transition against the real aggregate rule in `Candidature.moveTo()`, and Section 6.6's exception handler turns a rejected one into a clean `400` the board can react to. If the two lists ever drifted apart, the UI would just offer a button that the server correctly refuses - a worse experience, never a correctness bug. The rule that actually matters lives in exactly one place: the aggregate.
+
 ---
 
-## 10. Glossary
+## 10. Infrastructure as code: from six modules to a running system
+
+Everything above this section runs the same way whether it's on a laptop or in AWS - that's what hexagonal architecture buys you. This section is about the part that *does* change: how the one deployable Spring Boot process, one Postgres instance, and one Kafka cluster described throughout this guide actually get provisioned on real infrastructure. As of this writing, `infra/terraform/` is written and passes `terraform validate`, but nothing in it has been `apply`'d yet - the AWS resources described here don't exist. That distinction matters and is kept honest deliberately, both in this guide and in the [README's roadmap](../../README.md#roadmap): reading Terraform that describes real infrastructure is a different, more useful exercise than reading a diagram, but it's still not the same as having watched it run.
+
+### 10.1 Six modules, one concern each
+
+`infra/terraform/modules/` mirrors the table in the README: `network` (VPC, subnets, NAT), `rds` (the one Postgres instance every context shares - Section 3.8's shared-nothing-except-infrastructure model), `msk` (managed Kafka, serverless so there's no broker capacity to plan), `ecs-service` (the Fargate service running the one deployable jar), `frontend-hosting` (S3 + CloudFront for the built Angular app), and `observability` (CloudWatch alarms). `environments/dev` and `environments/prod` compose the same six modules with different inputs - smaller instance sizes and a single NAT gateway for dev, Multi-AZ RDS and one NAT per AZ for prod - which is the same idea as this codebase's ports-and-adapters split, one level up: the modules are the stable interface, the environments are what varies.
+
+### 10.2 A module dependency cycle, avoided by moving one resource up a level
+
+`ecs-service` needs `rds`'s database endpoint and `msk`'s bootstrap brokers as inputs, to wire them into the container's environment variables. `rds` and `msk`, in turn, need to know the ECS tasks' security group id, so they can allow inbound traffic *only* from it. Each side needs something the other produces - a genuine cycle, and Terraform has no mechanism for a module to depend on another module that depends back on it.
+
+The fix is the same kind of move used throughout this codebase whenever two things need to reference each other: introduce something upstream of both that neither depends on. Each environment's `main.tf` creates the ECS tasks' security group itself, directly, before calling any module:
+
+```hcl
+resource "aws_security_group" "ecs_tasks" {
+  name_prefix = "${local.name_prefix}-ecs-"
+  vpc_id      = module.network.vpc_id
+}
+```
+
+`rds` and `msk` take its id as an input, to write their own ingress rules against it. `ecs-service` also takes it as an input - it doesn't create the security group, it only attaches one rule to it (`aws_vpc_security_group_ingress_rule`, "the ALB can reach the container port"), a rule that references a security group the module was handed, not one it owns. Nobody's output depends on the resource that creates them; the cycle is gone because the shared thing moved to where both sides could see it without needing each other.
+
+### 10.3 Provisioning a repository before there's anything to put in it
+
+`ecs-service` creates its own ECR repository (`aws_ecr_repository`), rather than assuming one exists. That reverses the usual order of operations: normally you'd build and push an image, *then* point infrastructure at it. Here, the infrastructure that will eventually pull the image is also what creates the shelf it sits on.
+
+This works because an ECR repository URL is fully deterministic - `{account-id}.dkr.ecr.{region}.amazonaws.com/{repo-name}` - computable by anyone who knows the account, region, and name, without needing the repository to exist first or any Terraform output to have run. The practical consequence, spelled out in `infra/terraform/README.md`: the very first `terraform apply` for a new environment happens with a placeholder `container_image` (a public "hello world" image), because the real one can't be built and pushed to a repository that doesn't exist yet. Once it applies, `backend/Dockerfile` builds the real image, it's pushed to the now-existing repository, and a second `apply` swaps `container_image` for the real tag. Bootstrapping infrastructure sometimes means accepting a deliberately wrong first state to get to a place where the right one becomes possible.
+
+### 10.4 One browser origin, two backends
+
+CloudFront in `frontend-hosting` is configured with two origins, not one: the S3 bucket holding the built Angular app (the default behavior), and the ALB fronting the ECS service, matched only for the path pattern `/api/*`. This is the exact same reasoning already at work in local development, where `frontend/proxy.conf.json` forwards `/api/*` to the backend so the dev server and the API look same-origin to the browser (Section 9's proxy paragraph). CloudFront's `/api/*` behavior is that same idea, running in production instead of on a laptop: the Angular app's own client-side routes (`/missions`, `/candidatures`, ...) and the backend's REST resources never collide, because from the browser's point of view there is only ever one origin, and the split happens invisibly, one layer below it.
+
+### 10.5 A password the application never sees as a literal
+
+`rds` generates its master password with `random_password` and immediately writes it into a Secrets Manager secret - it's never a Terraform variable, never appears in a `.tfvars` file, never gets logged in a `terraform plan`. `ecs-service`'s task definition references that secret by ARN, using ECS's ability to pull a *specific key* out of a JSON secret at container-start time (`"${secret_arn}:username::"`, `"${secret_arn}:password::"`), so the running container gets real environment variables (`SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`) without that value ever having passed through the Terraform state file's plaintext form, or through anyone's hands, at all. Rotating the password becomes a Secrets Manager operation and an ECS service restart - not a code change, not a redeploy of anything Terraform manages.
+
+### 10.6 Kafka's serverless offering makes one choice for you
+
+MSK Serverless (the `msk` module) mandates SASL/IAM client authentication - there's no opting into a broker-managed username/password, unlike self-managed MSK. That's a real constraint the application has to satisfy, not just infrastructure: `backend/bootstrap/build.gradle.kts` pulls in `software.amazon.msk:aws-msk-iam-auth`, and a dedicated `aws` Spring profile (`application-aws.yml`) sets the Kafka client properties IAM auth needs (`sasl.mechanism: AWS_MSK_IAM`, a `IAMLoginModule`/`IAMClientCallbackHandler` pair) - inactive locally, where `docker-compose.yml`'s Kafka needs none of this, and active only once `SPRING_PROFILES_ACTIVE=aws` is set by `ecs-service`. The ECS task's IAM *role* (not a stored credential) is what authenticates to Kafka at runtime - `aws_iam_role_policy.task_kafka` grants that role exactly `kafka-cluster:Connect`/`ReadData`/`WriteData` on this cluster, nothing broader.
+
+---
+
+## 11. Glossary
 
 - **Aggregate** - a cluster of domain objects treated as one unit for data changes, with one **aggregate root** as the only entry point external code may call. Guarantees invariants are never left inconsistent. *Example: `Mission`.*
 - **Anti-corruption layer** - a translation boundary that stops one bounded context's internal model from leaking into another's. *Example: `MissionPublishedIntegrationEvent` in `matching`, a local copy of the wire format that doesn't depend on Sourcing's `MissionPublished` class.*
@@ -780,7 +918,9 @@ The frontend isn't just a UI on top of the backend concepts above - it applies i
 - **Entity** - an object defined by its identity (an ID), not its current attributes, whose state can change over time. *Example: `Mission`.*
 - **Eventual consistency** - the guarantee that, absent new updates, all parts of a distributed system will *eventually* reflect the same state, but not necessarily at the same instant. *Example: a freelancer can see a mission in Sourcing a few hundred milliseconds before Matching has scored it.*
 - **Hexagonal architecture** (Ports & Adapters) - an architecture where business logic (domain + application) depends on nothing external; all technology lives in adapters implementing or calling interfaces (ports) the business logic defines.
+- **IAM role** - an AWS identity assumed by a resource (here, an ECS task) rather than a stored credential, granted only the specific permissions it needs. *Example: the ECS task role's `kafka-cluster:Connect` permission, scoped to exactly one MSK cluster, is what authenticates to Kafka instead of a username/password.*
 - **Idempotency** - the property that processing the same operation (or event) more than once produces the same result as processing it once, with no extra side effects. *Example: the unique constraint on `match_results` making a duplicate insert a safe no-op instead of a duplicate row.*
+- **Infrastructure as Code (IaC)** - describing infrastructure (servers, networks, databases) as versioned, reviewable configuration rather than manual console clicks, so provisioning it is repeatable and auditable the same way code is. *Example: `infra/terraform/`.*
 - **Modular monolith** - a single deployable application internally split into strictly-bounded modules (here, one per bounded context), communicating only through the same kinds of boundaries (events, ports) a true microservices split would use.
 - **Port** - an interface, owned by the application layer, naming a capability needed (output port) or offered (input port), independent of any specific technology. *Example: `MissionRepository` (output), `PublishMissionUseCase` (input).*
 - **Shared kernel** - a small, explicitly-agreed-upon piece of model shared between bounded contexts, kept minimal because every dependent context must agree before it changes. *Example: `Money`, `SkillSet` in `shared-kernel`.*
