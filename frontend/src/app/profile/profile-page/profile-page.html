@@ -20,7 +20,16 @@
     <h2 class="card__title">Skills &amp; rate</h2>
 
     @if (loading()) {
-      <p class="empty-state">Loading your profile…</p>
+      <div class="form" aria-hidden="true">
+        <div class="field field--wide">
+          <span class="field__label">Skills</span>
+          <div class="skeleton" style="height: 2.4rem; width: 100%;">Loading skills</div>
+        </div>
+        <div class="field">
+          <span class="field__label">Expected daily rate (EUR)</span>
+          <div class="skeleton" style="height: 2.4rem; width: 100%;">Loading rate</div>
+        </div>
+      </div>
     } @else {
       <form class="form" [formGroup]="form" (ngSubmit)="save()">
         <div class="field field--wide">
@@ -32,13 +41,6 @@
           <span class="field__label">Expected daily rate (EUR)</span>
           <input class="field__input" type="number" formControlName="expectedDailyRateAmount" min="1" />
         </label>
-
-        @if (errorMessage()) {
-          <p class="error-text">{{ errorMessage() }}</p>
-        }
-        @if (savedJustNow()) {
-          <p class="success-text">Profile saved.</p>
-        }
 
         <button class="form__submit" type="submit" [disabled]="saving()">
           {{ saving() ? 'Saving…' : 'Save profile' }}

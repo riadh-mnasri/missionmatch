@@ -1,0 +1,98 @@
+<section class="page">
+  <header class="page__header">
+    <span class="page__eyebrow">Overview</span>
+    <h1 class="page__title">Dashboard</h1>
+    <p class="page__subtitle">Where missions, matches and your candidature pipeline meet.</p>
+  </header>
+
+  @if (loading()) {
+    <div class="stats" aria-hidden="true">
+      @for (i of [1, 2, 3, 4]; track i) {
+        <div class="stat-tile">
+          <span class="stat-tile__label skeleton" style="width: 6rem;">Loading</span>
+          <span class="stat-tile__value skeleton" style="width: 3rem;">00</span>
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="stats">
+      <div class="stat-tile">
+        <span class="stat-tile__label">Total missions</span>
+        <span class="stat-tile__value">{{ missions().length }}</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-tile__label">Open</span>
+        <span class="stat-tile__value">{{ openMissions() }}</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-tile__label">Avg. daily rate</span>
+        <span class="stat-tile__value">{{ averageRate() }}€</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-tile__label">Your matches</span>
+        <span class="stat-tile__value">{{ matches().length }}</span>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-tile__label">Your pipeline</span>
+        <span class="stat-tile__value">{{ candidatures().length }}</span>
+      </div>
+    </div>
+  }
+
+  <div class="dashboard-grid">
+    <div class="card">
+      <h2 class="card__title">Top skills in demand</h2>
+
+      @if (!loading() && topSkills().length === 0) {
+        <p class="empty-state">No missions published yet.</p>
+      } @else {
+        <ul class="skill-bars">
+          @for (entry of topSkills(); track entry.skill) {
+            <li class="skill-bar">
+              <span class="skill-bar__label">{{ entry.skill }}</span>
+              <div class="skill-bar__track">
+                <div class="skill-bar__fill" [style.width.%]="(entry.count / maxSkillCount()) * 100"></div>
+              </div>
+              <span class="skill-bar__count">{{ entry.count }}</span>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+
+    <div class="card">
+      <h2 class="card__title">Your pipeline at a glance</h2>
+      <p class="hint">Candidatures for freelancer id <code>{{ freelancerId }}</code></p>
+
+      @if (!loading() && candidatures().length === 0) {
+        <p class="empty-state">No candidatures yet. Check the Matches page for a mission to apply to.</p>
+      } @else {
+        <ul class="pipeline-summary">
+          @for (column of pipelineColumns; track column.status) {
+            <li class="pipeline-summary__row">
+              <span class="pipeline-summary__label">{{ column.label }}</span>
+              <span class="pipeline-summary__count">{{ pipelineByStatus().get(column.status) ?? 0 }}</span>
+            </li>
+          }
+        </ul>
+      }
+
+      <a class="dashboard-grid__link" routerLink="/candidatures">Open the full pipeline &rarr;</a>
+    </div>
+  </div>
+
+  <div class="quick-links">
+    <a class="quick-link" routerLink="/missions">
+      <span class="quick-link__title">Publish a mission</span>
+      <span class="quick-link__desc">Add a new mission for Matching to score.</span>
+    </a>
+    <a class="quick-link" routerLink="/profile">
+      <span class="quick-link__title">Update your profile</span>
+      <span class="quick-link__desc">Skills and expected daily rate.</span>
+    </a>
+    <a class="quick-link" routerLink="/matches">
+      <span class="quick-link__title">Look up matches</span>
+      <span class="quick-link__desc">Missions ranked by fit for a freelancer.</span>
+    </a>
+  </div>
+</section>

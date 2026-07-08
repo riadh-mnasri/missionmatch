@@ -2,6 +2,7 @@ import { Component, inject, output, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MissionService } from '../mission.service';
 import { ChipInput } from '../../shared/chip-input/chip-input';
+import { ToastService } from '../../shared/toast/toast.service';
 
 @Component({
   selector: 'app-mission-form',
@@ -13,9 +14,9 @@ export class MissionForm {
 
   private readonly formBuilder = inject(FormBuilder);
   private readonly missionService = inject(MissionService);
+  private readonly toastService = inject(ToastService);
 
   protected readonly submitting = signal(false);
-  protected readonly errorMessage = signal<string | null>(null);
   protected readonly skills = signal<string[]>([]);
   protected readonly submitAttempted = signal(false);
 
@@ -36,7 +37,6 @@ export class MissionForm {
 
     const value = this.form.getRawValue();
     this.submitting.set(true);
-    this.errorMessage.set(null);
 
     this.missionService
       .publish({
@@ -51,11 +51,13 @@ export class MissionForm {
           this.submitting.set(false);
           this.form.reset({ dailyRateAmount: 500 });
           this.skills.set([]);
+          this.submitAttempted.set(false);
+          this.toastService.success(`Mission "${value.title}" published.`);
           this.published.emit();
         },
         error: () => {
           this.submitting.set(false);
-          this.errorMessage.set('Could not publish the mission. Please try again.');
+          this.toastService.error('Could not publish the mission. Please try again.');
         },
       });
   }

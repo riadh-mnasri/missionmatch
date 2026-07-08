@@ -29,6 +29,25 @@
     }
   </div>
 
+  @if (loading() && !searched()) {
+    <div class="card" aria-hidden="true">
+      <h2 class="card__title">Results</h2>
+      <ul class="match-list">
+        @for (i of [1, 2]; track i) {
+          <li class="match-card">
+            <div class="match-card__info">
+              <p class="match-card__label">Mission</p>
+              <p class="match-card__value skeleton" style="width: 14rem;">Loading mission id</p>
+            </div>
+            <div class="match-card__score">
+              <span class="skeleton" style="display: block; width: 58px; height: 58px; border-radius: 50%;"></span>
+            </div>
+          </li>
+        }
+      </ul>
+    </div>
+  }
+
   @if (searched()) {
     <div class="card">
       <h2 class="card__title">Results</h2>

@@ -28,10 +28,53 @@
   </div>
 
   <div class="card">
-    <h2 class="card__title">All missions</h2>
+    <div class="list-toolbar">
+      <h2 class="card__title">All missions</h2>
+
+      <div class="list-toolbar__controls">
+        <input
+          class="list-toolbar__search"
+          type="text"
+          placeholder="Search title, client, skill…"
+          [(ngModel)]="searchQuery"
+        />
+
+        <div class="list-toolbar__pills">
+          <button type="button" class="pill" [class.pill--active]="statusFilter() === 'ALL'" (click)="statusFilter.set('ALL')">All</button>
+          <button type="button" class="pill" [class.pill--active]="statusFilter() === 'OPEN'" (click)="statusFilter.set('OPEN')">Open</button>
+          <button type="button" class="pill" [class.pill--active]="statusFilter() === 'CLOSED'" (click)="statusFilter.set('CLOSED')">Closed</button>
+        </div>
+
+        <select class="list-toolbar__sort" [ngModel]="sortBy()" (ngModelChange)="sortBy.set($event)">
+          <option value="start-date">Soonest start date</option>
+          <option value="rate-desc">Highest daily rate</option>
+          <option value="rate-asc">Lowest daily rate</option>
+        </select>
+      </div>
+    </div>
 
     @if (loading()) {
-      <p class="empty-state">Loading missions…</p>
+      <ul class="mission-list" aria-hidden="true">
+        @for (i of [1, 2, 3]; track i) {
+          <li class="mission-card">
+            <span class="mission-card__avatar skeleton"></span>
+            <div class="mission-card__main">
+              <div class="mission-card__heading">
+                <h3 class="skeleton" style="width: 12rem;">Loading mission title</h3>
+              </div>
+              <p class="mission-card__client skeleton" style="width: 8rem;">Loading client name</p>
+              <ul class="mission-card__skills">
+                <li class="tag skeleton" style="width: 4rem;">skill</li>
+                <li class="tag skeleton" style="width: 5rem;">skill</li>
+              </ul>
+            </div>
+            <div class="mission-card__side">
+              <span class="mission-card__rate skeleton" style="width: 4rem;">000€</span>
+              <span class="mission-card__date skeleton" style="width: 5rem;">in a while</span>
+            </div>
+          </li>
+        }
+      </ul>
     } @else if (errorMessage()) {
       <p class="error-text">{{ errorMessage() }}</p>
     } @else if (missions().length === 0) {
@@ -44,9 +87,19 @@
         </span>
         <span>No missions published yet. Use the form above to publish your first one.</span>
       </div>
+    } @else if (filteredMissions().length === 0) {
+      <div class="empty-state">
+        <span class="empty-state__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M20 20l-4.35-4.35" />
+          </svg>
+        </span>
+        <span>No missions match your search or filter.</span>
+      </div>
     } @else {
       <ul class="mission-list">
-        @for (mission of missions(); track mission.id) {
+        @for (mission of filteredMissions(); track mission.id) {
           <li class="mission-card" [class.mission-card--closed]="mission.status === 'CLOSED'">
             <span class="mission-card__avatar">{{ initials(mission.clientName) }}</span>
 

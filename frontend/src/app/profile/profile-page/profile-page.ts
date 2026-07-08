@@ -3,6 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ProfileService } from '../profile.service';
 import { ChipInput } from '../../shared/chip-input/chip-input';
 import { localFreelancerId } from '../../shared/local-freelancer-id';
+import { ToastService } from '../../shared/toast/toast.service';
 
 @Component({
   selector: 'app-profile-page',
@@ -13,6 +14,7 @@ import { localFreelancerId } from '../../shared/local-freelancer-id';
 export class ProfilePage implements OnInit {
   private readonly profileService = inject(ProfileService);
   private readonly formBuilder = inject(FormBuilder);
+  private readonly toastService = inject(ToastService);
 
   protected readonly freelancerId = localFreelancerId();
 
@@ -20,8 +22,6 @@ export class ProfilePage implements OnInit {
   protected readonly saving = signal(false);
   protected readonly skills = signal<string[]>([]);
   protected readonly submitAttempted = signal(false);
-  protected readonly errorMessage = signal<string | null>(null);
-  protected readonly savedJustNow = signal(false);
 
   protected readonly form = this.formBuilder.nonNullable.group({
     expectedDailyRateAmount: [500, [Validators.required, Validators.min(1)]],
@@ -50,8 +50,6 @@ export class ProfilePage implements OnInit {
     }
 
     this.saving.set(true);
-    this.errorMessage.set(null);
-    this.savedJustNow.set(false);
 
     this.profileService
       .update(this.freelancerId, {
@@ -62,11 +60,11 @@ export class ProfilePage implements OnInit {
       .subscribe({
         next: () => {
           this.saving.set(false);
-          this.savedJustNow.set(true);
+          this.toastService.success('Profile saved.');
         },
         error: () => {
           this.saving.set(false);
-          this.errorMessage.set('Could not save your profile. Please try again.');
+          this.toastService.error('Could not save your profile. Please try again.');
         },
       });
   }

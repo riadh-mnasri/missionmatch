@@ -1,0 +1,93 @@
+:host {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.toast-host {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.6rem;
+  max-width: min(360px, calc(100vw - 3rem));
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 0.95rem;
+  box-shadow: var(--shadow-pop);
+  animation: toast-in 0.2s ease;
+
+  &__icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  &__message {
+    flex: 1;
+    font-size: 0.85rem;
+    font-weight: 500;
+    line-height: 1.4;
+    padding-top: 0.15rem;
+  }
+
+  &__close {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 0.15rem;
+    border-radius: var(--radius-sm);
+    transition: background 0.15s ease, color 0.15s ease;
+
+    svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+    }
+
+    &:hover {
+      background: var(--color-neutral-bg);
+      color: var(--color-text);
+    }
+  }
+
+  &--success &__icon {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+  }
+
+  &--error &__icon {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+  }
+}

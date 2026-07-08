@@ -35,13 +35,13 @@
     font-weight: 700;
     font-size: 0.9rem;
     cursor: pointer;
-    box-shadow: 0 6px 16px rgba(180, 83, 9, 0.22);
+    box-shadow: 0 6px 16px rgba(var(--color-primary-rgb), 0.22);
     transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 
     &:hover:not(:disabled) {
       background: var(--color-primary-hover);
       transform: translateY(-1px);
-      box-shadow: 0 8px 20px rgba(180, 83, 9, 0.28);
+      box-shadow: 0 8px 20px rgba(var(--color-primary-rgb), 0.28);
     }
 
     &:disabled {

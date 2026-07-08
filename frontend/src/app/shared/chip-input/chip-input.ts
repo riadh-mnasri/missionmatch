@@ -1,4 +1,4 @@
-import { Component, input, model, signal } from '@angular/core';
+import { Component, effect, input, model, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { tagColorClass } from '../tag-color';
 
@@ -16,6 +16,18 @@ export class ChipInput {
   protected draft = '';
   protected readonly touched = signal(false);
   protected readonly tagColorClass = tagColorClass;
+
+  constructor() {
+    // A parent form resets `submitted` back to false once it's done handling a submission
+    // (successful or otherwise reset). Without this, `touched` - set the first time the user
+    // ever interacts with the field - would stay stuck true forever, so a form reset after a
+    // successful publish would immediately (and wrongly) flag the now-empty field as invalid.
+    effect(() => {
+      if (!this.submitted()) {
+        this.touched.set(false);
+      }
+    });
+  }
 
   onKeydown(event: KeyboardEvent): void {
     if (event.key === 'Enter' || event.key === ',') {

@@ -29,6 +29,25 @@
     }
   </div>
 
+  @if (loading() && !searched()) {
+    <div class="board" aria-hidden="true">
+      @for (column of columns; track column.status) {
+        <div class="board-column">
+          <div class="board-column__header">
+            <span class="skeleton" style="width: 4rem;">{{ column.label }}</span>
+            <span class="board-column__count skeleton" style="width: 1.4rem;">0</span>
+          </div>
+          <div class="board-column__cards">
+            <div class="candidature-card">
+              <p class="candidature-card__label">Mission</p>
+              <p class="candidature-card__value skeleton" style="width: 100%;">Loading mission id</p>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
   @if (searched()) {
     @if (candidatures().length === 0) {
       <div class="card">
@@ -43,6 +62,18 @@
         </div>
       </div>
     } @else {
+      <div class="list-toolbar">
+        <span></span>
+        <div class="list-toolbar__controls">
+          <input
+            class="list-toolbar__search"
+            type="text"
+            placeholder="Filter by mission id…"
+            [(ngModel)]="filterQuery"
+          />
+        </div>
+      </div>
+
       <div class="board">
         @for (column of columns; track column.status) {
           <div class="board-column" [class]="'board-column--' + column.status.toLowerCase().replace('_', '-')">

@@ -26,10 +26,6 @@
     </label>
   </div>
 
-  @if (errorMessage()) {
-    <p class="error-text">{{ errorMessage() }}</p>
-  }
-
   <button class="form__submit" type="submit" [disabled]="submitting()">
     {{ submitting() ? 'Publishing…' : 'Publish mission' }}
   </button>
