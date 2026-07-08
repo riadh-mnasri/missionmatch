@@ -1,0 +1,184 @@
+.hint {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin: -0.75rem 0 0;
+}
+
+.search {
+  display: flex;
+  gap: 0.75rem;
+
+  &__input {
+    flex: 1;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.6rem 0.85rem;
+    font-size: 0.9rem;
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    transition: border-color 0.15s ease;
+
+    &:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-soft);
+    }
+  }
+
+  &__submit {
+    background: var(--color-primary);
+    color: var(--color-primary-contrast);
+    border: none;
+    padding: 0.6rem 1.4rem;
+    border-radius: var(--radius-sm);
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    box-shadow: 0 6px 16px rgba(180, 83, 9, 0.22);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+
+    &:hover:not(:disabled) {
+      background: var(--color-primary-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 20px rgba(180, 83, 9, 0.28);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+  }
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.board-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  min-height: 140px;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+    padding-bottom: 0.6rem;
+    border-bottom: 2px solid var(--color-border);
+  }
+
+  &__count {
+    background: var(--color-neutral-bg);
+    color: var(--color-neutral-text);
+    border-radius: 999px;
+    padding: 0.1rem 0.55rem;
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  &--to-apply &__header { color: var(--color-neutral-text); }
+  &--applied &__header { color: var(--tag-5-text); border-bottom-color: var(--tag-5-bg); }
+  &--interview &__header { color: var(--tag-6-text); border-bottom-color: var(--tag-6-bg); }
+  &--accepted &__header { color: var(--color-success-text); border-bottom-color: var(--color-success-bg); }
+  &--rejected &__header { color: var(--color-danger); border-bottom-color: var(--color-danger-soft); }
+}
+
+.candidature-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+
+  &:hover {
+    box-shadow: var(--shadow-card-hover);
+    border-color: #dcd4c4;
+    transform: translateY(-2px);
+  }
+
+  &__label {
+    font-size: 0.68rem;
+    color: var(--color-text-muted);
+    margin: 0;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  &__value {
+    font-size: 0.78rem;
+    font-weight: 500;
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow-wrap: anywhere;
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  &__action {
+    background: var(--color-primary-soft);
+    color: var(--color-primary-hover);
+    border: none;
+    padding: 0.35rem 0.65rem;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.15s ease;
+
+    &:hover:not(:disabled) {
+      background: var(--color-primary);
+      color: var(--color-primary-contrast);
+      transform: translateY(-1px);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    &--danger {
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
+
+      &:hover:not(:disabled) {
+        background: var(--color-danger);
+        color: #ffffff;
+      }
+    }
+  }
+}
+
+@media (max-width: 900px) {
+  .board {
+    grid-template-columns: 1fr;
+  }
+}

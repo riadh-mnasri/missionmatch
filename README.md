@@ -199,6 +199,7 @@ missionmatch/
 │       ├── missions/            # publish/list/close missions
 │       ├── profile/             # create/update the local freelancer's profile
 │       ├── matches/             # look up matches by freelancer id
+│       ├── candidatures/        # candidature pipeline kanban, by freelancer id
 │       └── shared/              # sidebar, chip-input, status-badge, tag colors, ...
 ├── docker-compose.yml           # Postgres + Kafka for local development
 ├── docs/
@@ -409,7 +410,7 @@ Secrets (DB credentials, Kafka auth) live in AWS Secrets Manager and are injecte
 - [x] Have Matching consume `MissionClosed` so its read model doesn't drift from Sourcing's
 - [x] Wire `application-tracking` end to end (candidature pipeline, consumes `MatchComputed`)
 - [x] Wire `notification` (logs instead of real email/Slack, but consumes both `MatchComputed` and `CandidatureStatusChanged` for real) - all five bounded contexts are now fully implemented
-- [ ] Angular: application pipeline kanban for the candidature statuses `application-tracking` already tracks
+- [x] Angular: application pipeline kanban for the candidature statuses `application-tracking` already tracks
 - [ ] Swap `LoggingNotificationSender` for a real email/Slack adapter behind the same `NotificationSender` port
 - [ ] Terraform `dev` environment, deployed end-to-end
 - [ ] Optional: introduce Cucumber for living-documentation acceptance tests

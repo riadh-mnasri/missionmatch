@@ -1,0 +1,83 @@
+<section class="page">
+  <header class="page__header">
+    <span class="page__eyebrow">Application Tracking</span>
+    <h1 class="page__title">Pipeline</h1>
+    <p class="page__subtitle">
+      Follow a freelancer's candidatures from suggested match to accepted mission.
+    </p>
+  </header>
+
+  <div class="card">
+    <h2 class="card__title">Find a pipeline</h2>
+    <p class="hint">
+      Pre-filled with your profile's id. Paste a different freelancer id to look up someone else's pipeline.
+    </p>
+    <form class="search" (ngSubmit)="search()">
+      <input
+        class="search__input"
+        type="text"
+        name="freelancerId"
+        placeholder="Freelancer id (UUID)"
+        [(ngModel)]="freelancerId"
+      />
+      <button class="search__submit" type="submit" [disabled]="loading()">
+        {{ loading() ? 'Searching…' : 'Search' }}
+      </button>
+    </form>
+    @if (errorMessage()) {
+      <p class="error-text">{{ errorMessage() }}</p>
+    }
+  </div>
+
+  @if (searched()) {
+    @if (candidatures().length === 0) {
+      <div class="card">
+        <div class="empty-state">
+          <span class="empty-state__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4.5" width="18" height="15" rx="2" />
+              <path d="M9 4.5v15M15 4.5v15" />
+            </svg>
+          </span>
+          <span>No candidatures yet. They appear here once a match is found for this freelancer.</span>
+        </div>
+      </div>
+    } @else {
+      <div class="board">
+        @for (column of columns; track column.status) {
+          <div class="board-column" [class]="'board-column--' + column.status.toLowerCase().replace('_', '-')">
+            <div class="board-column__header">
+              <span>{{ column.label }}</span>
+              <span class="board-column__count">{{ byColumn().get(column.status)?.length ?? 0 }}</span>
+            </div>
+
+            <div class="board-column__cards">
+              @for (candidature of byColumn().get(column.status); track candidature.id) {
+                <div class="candidature-card">
+                  <p class="candidature-card__label">Mission</p>
+                  <p class="candidature-card__value">{{ candidature.missionId }}</p>
+
+                  @if (allowedTransitions[candidature.status].length > 0) {
+                    <div class="candidature-card__actions">
+                      @for (target of allowedTransitions[candidature.status]; track target) {
+                        <button
+                          type="button"
+                          class="candidature-card__action"
+                          [class.candidature-card__action--danger]="target === 'REJECTED'"
+                          [disabled]="movingId() === candidature.id"
+                          (click)="move(candidature, target)"
+                        >
+                          {{ movingId() === candidature.id ? 'Moving…' : columnLabel(target) }}
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+</section>
